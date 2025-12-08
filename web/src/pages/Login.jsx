@@ -1,5 +1,4 @@
 import React, { useContext, useState } from 'react';
-import { GoogleLogin } from '@react-oauth/google';
 import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import api from '../utils/api';
@@ -61,14 +60,14 @@ const Login = () => {
               <span className="loading loading-spinner loading-md"></span>
             </div>
           ) : (
-            <div className="flex justify-center">
-              <GoogleLogin
-                onSuccess={handleGoogleSuccess}
-                onError={handleGoogleError}
-                theme="filled_black"
-                size="large"
-              />
-            </div>
+          <div className="flex justify-center">
+            <button
+              className="btn btn-primary btn-wide"
+              onClick={() => window.location.href = `${api.defaults.baseURL}/auth/google`}
+            >
+              Sign in with Google
+            </button>
+          </div>
           )}
 
           <div className="divider text-base-content">or</div>

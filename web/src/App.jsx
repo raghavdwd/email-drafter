@@ -5,6 +5,7 @@ import RequestApproval from './pages/RequestApproval';
 import Dashboard from './pages/Dashboard';
 import AdminLogin from './pages/AdminLogin';
 import AdminDashboard from './pages/AdminDashboard';
+import GmailCallback from './pages/GmailCallback';
 import {
   ProtectedUserRoute,
   ProtectedAdminRoute,
@@ -25,6 +26,7 @@ const App = () => {
             </ProtectedUserRoute>
           }
         />
+        <Route path="/gmail-callback" element={<GmailCallback />} />
 
         {/* admin routes */}
         <Route path="/admin" element={<AdminLogin />} />
@@ -45,3 +47,4 @@ const App = () => {
 };
 
 export default App;
+
