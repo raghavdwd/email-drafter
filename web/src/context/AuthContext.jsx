@@ -1,4 +1,5 @@
 import React, { createContext, useState, useEffect } from 'react';
+import api from '../utils/api';
 
 export const AuthContext = createContext();
 
@@ -9,44 +10,49 @@ export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // load user/admin from localStorage on mount
+  // load user from session on mount
   useEffect(() => {
-    const storedToken = localStorage.getItem('token');
-    const storedUser = localStorage.getItem('user');
-    const storedAdmin = localStorage.getItem('admin');
-
-    if (storedToken) {
-      setToken(storedToken);
-      if (storedUser) setUser(JSON.parse(storedUser));
-      if (storedAdmin) setAdmin(JSON.parse(storedAdmin));
-    }
-    setLoading(false);
+    const checkSession = async () => {
+      try {
+        const res = await api.get('/auth/me');
+        if (res.data.user) {
+          setUser(res.data.user);
+          // If admin logic is needed, handle likely via a separate role check or distinct endpoint
+           if (res.data.user.role === 'admin') {
+             setAdmin(res.data.user);
+           }
+        }
+      } catch (error) {
+        // Not logged in or session expired
+        console.log('No active session');
+      } finally {
+        setLoading(false);
+      }
+    };
+    checkSession();
   }, []);
 
-  // login function for users
-  const login = (token, userData) => {
-    localStorage.setItem('token', token);
-    localStorage.setItem('user', JSON.stringify(userData));
-    setToken(token);
+  // login function (mostly to update local state after successful auth)
+  const login = (userData) => {
     setUser(userData);
   };
 
   // login function for admin
-  const loginAdmin = (token, adminData) => {
-    localStorage.setItem('token', token);
-    localStorage.setItem('admin', JSON.stringify(adminData));
-    setToken(token);
+  const loginAdmin = (adminData) => {
     setAdmin(adminData);
   };
 
   // logout function
-  const logout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    localStorage.removeItem('admin');
+  const logout = async () => {
+    try {
+      await api.get('/auth/logout');
+    } catch (err) {
+      console.error('Logout failed', err);
+    }
     setToken(null);
     setUser(null);
     setAdmin(null);
+    localStorage.clear();
   };
 
   return (
