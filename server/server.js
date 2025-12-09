@@ -21,7 +21,7 @@ import './src/models/uploadedRow.js';
 const server = http.createServer(app);
 
 // Sync database and start server
-sequelize.sync({ alter: true }) // Set alter: true if you want to update tables, but be careful in production
+sequelize.sync({ alter: false }) // Set alter: true if you want to update tables, but be careful in production
   .then(() => {
     console.log('✓ Database synced successfully');
     server.listen(PORT, () => {

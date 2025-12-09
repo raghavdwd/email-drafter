@@ -27,7 +27,6 @@ export const replacePlaceholders = (template, data) => {
     '{{Client SS}}': data.clientScreenshotUrl || '',
     '{{Sending Account Name}}': data.sendingAccountName || '',
     '{{SendingAccountName}}': data.sendingAccountName || '',
-    '{{Assessment}}': data.assessment || '',
   };
 
   // replace all placeholders
