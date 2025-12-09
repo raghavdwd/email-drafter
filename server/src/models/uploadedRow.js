@@ -57,6 +57,11 @@ const UploadedRow = sequelize.define('UploadedRow', {
     field: 'sending_account_name',
     allowNull: true
   },
+  assessment: {
+    type: DataTypes.TEXT,
+    field: 'assessment',
+    allowNull: true
+  },
   createdAt: {
     type: DataTypes.DATE,
     field: 'created_at',

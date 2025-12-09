@@ -37,6 +37,7 @@ export const uploadExcel = async (req, res) => {
       'Calendar Link',
       'Client Screenshot URL',
       'Sending Account Name',
+      'Assessment',
     ];
 
     const firstRow = data[0];
@@ -63,6 +64,7 @@ export const uploadExcel = async (req, res) => {
       calendarLink: row['Calendar Link']?.toString() || null,
       clientScreenshotUrl: row['Client Screenshot URL']?.toString() || null,
       sendingAccountName: row['Sending Account Name']?.toString() || null,
+      assessment: row['Assessment']?.toString() || null,
     }));
 
     // save all rows to database

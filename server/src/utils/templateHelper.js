@@ -17,7 +17,9 @@ export const replacePlaceholders = (template, data) => {
     '{{Client Traffic}}': data.clientTraffic?.toString() || '',
     '{{Client traffic}}': data.clientTraffic?.toString() || '',
     '{{Competitor Name}}': data.competitorName || '',
+    '{{Competitor business name}}': data.competitorName || '',
     '{{Competitor Traffic}}': data.competitorTraffic?.toString() || '',
+    '{{Competitor traffic}}': data.competitorTraffic?.toString() || '',
     '{{Competitor Website}}': data.competitorWebsite || '',
     '{{Competitor Website Link}}': data.competitorWebsite || '',
     '{{Calendar Link}}': data.calendarLink || '',
@@ -25,6 +27,7 @@ export const replacePlaceholders = (template, data) => {
     '{{Client SS}}': data.clientScreenshotUrl || '',
     '{{Sending Account Name}}': data.sendingAccountName || '',
     '{{SendingAccountName}}': data.sendingAccountName || '',
+    '{{Assessment}}': data.assessment || '',
   };
 
   // replace all placeholders
