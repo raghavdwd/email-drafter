@@ -18,8 +18,6 @@ const createEmailMessage = async (to, subject, text, html) => {
   };
 
   // Create a MailComposer instance
-  // Note: nodemailer exports MailComposer via the main package but sometimes it's easier to use a dummy transport or just MailComposer directly if available.
-  // Using a stream transport to generate the raw content.
   const transporter = nodemailer.createTransport({
     streamTransport: true,
     newline: 'unix',
