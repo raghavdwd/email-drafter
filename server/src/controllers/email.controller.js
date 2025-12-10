@@ -175,13 +175,31 @@ export const generateDrafts = async (req, res) => {
       }
 
       const subject = replacePlaceholders(template.subject, row);
-      const body = replacePlaceholders(template.body, row);
+      const textBody = replacePlaceholders(template.body, row);
+      
+      // Simple text-to-HTML conversion: wrap paragraphs or replace newlines
+      // We'll wrap the whole body in a div and replace newlines with <br> for simplicity
+      let htmlBody = `<div>${textBody.replace(/\n/g, '<br>')}</div>`;
+
+      if (row.clientScreenshotUrl) {
+        if (htmlBody.includes(row.clientScreenshotUrl)) {
+          // Replace the URL text with the image tag
+          htmlBody = htmlBody.replace(
+            row.clientScreenshotUrl,
+            `<br><img src="${row.clientScreenshotUrl}" alt="Client Screenshot" style="max-width: 100%; height: auto;"><br>`
+          );
+        } else {
+          // Fallback: append if not found in body
+          htmlBody += `<br><br><img src="${row.clientScreenshotUrl}" alt="Client Screenshot" style="max-width: 100%; height: auto;">`;
+        }
+      }
 
       return {
         row: index + 1,
         to: '', // can add email column to Excel if needed
         subject,
-        body,
+        body: '', // Keep body empty as requested by user to only send HTML
+        html: htmlBody,
       };
     });
 
