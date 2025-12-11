@@ -45,6 +45,11 @@ app.use('/auth', authRoutes);
 app.use('/admin', adminRoutes);
 app.use('/', emailRoutes);
 
+//health check
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok' });
+});
+
 // Create HTTP Server (optional, could just use app.listen)
 // const server = http.createServer(app); // Removed http.createServer
 
