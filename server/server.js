@@ -1,6 +1,6 @@
 import './src/config/env.js';
 import express from 'express';
-import http from "http";
+// import http from "http"; // Removed http module
 import cors from "cors";
 import session from 'express-session';
 import passport from 'passport';
@@ -46,13 +46,13 @@ app.use('/admin', adminRoutes);
 app.use('/', emailRoutes);
 
 // Create HTTP Server (optional, could just use app.listen)
-const server = http.createServer(app);
+// const server = http.createServer(app); // Removed http.createServer
 
 // Sync database and start server
-sequelize.sync({ alter: false }) // Set alter: true if you want to update tables, but be careful in production
+sequelize.sync({ alter: false })
   .then(() => {
     console.log('✓ Database synced successfully');
-    server.listen(PORT, () => {
+    app.listen(PORT, () => {
         console.log(`Server running on port ${PORT}`);
     });
   })
