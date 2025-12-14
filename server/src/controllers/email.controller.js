@@ -26,17 +26,14 @@ export const uploadExcel = async (req, res) => {
       return res.status(400).json({ error: 'Excel file is empty' });
     }
 
-    // validate required columns
+    // validate required columns based on new template structure
+    // Note: Only core fields are required, competitor data is optional
     const requiredColumns = [
-      'First Name',
-      'Client Business Name',
+      'Website',
+      'Company Name',
       'Client Traffic',
-      'Competitor Name',
-      'Competitor Traffic',
-      'Competitor Website',
-      'Calendar Link',
-      'Client Screenshot URL',
-      'Sending Account Name',
+      'Name',
+      'Email',
     ];
 
     const firstRow = data[0];
@@ -54,15 +51,21 @@ export const uploadExcel = async (req, res) => {
     // prepare rows for database
     const rows = data.map(row => ({
       fileId,
-      firstName: row['First Name']?.toString() || null,
-      clientBusinessName: row['Client Business Name']?.toString() || null,
+      firstName: row['Name']?.toString() || null,
+      clientBusinessName: row['Company Name']?.toString() || null,
       clientTraffic: row['Client Traffic'] ? parseInt(row['Client Traffic']) : null,
-      competitorName: row['Competitor Name']?.toString() || null,
-      competitorTraffic: row['Competitor Traffic'] ? parseInt(row['Competitor Traffic']) : null,
-      competitorWebsite: row['Competitor Website']?.toString() || null,
-      calendarLink: row['Calendar Link']?.toString() || null,
-      clientScreenshotUrl: row['Client Screenshot URL']?.toString() || null,
-      sendingAccountName: row['Sending Account Name']?.toString() || null,
+      competitorName: row['Competitor Business Name 1']?.toString() || null,
+      // Handle both "Competitor traffic 1" (lowercase) and "Competitor Traffic 1" (uppercase)
+      competitorTraffic: row['Competitor traffic 1'] ? parseInt(row['Competitor traffic 1']) : (row['Competitor Traffic 1'] ? parseInt(row['Competitor Traffic 1']) : null),
+      competitorWebsite: row['Competitor website 1']?.toString() || row['Competitor Website 1']?.toString() || null,
+      competitorName2: row['Competitor Business Name 2']?.toString() || null,
+      competitorTraffic2: row['Competitor Traffic 2'] ? parseInt(row['Competitor Traffic 2']) : null,
+      competitorWebsite2: row['Competitor Website 2']?.toString() || null,
+      calendarLink: null, // not in new template
+      clientScreenshotUrl: row['Client Screenshot']?.toString() || null,
+      competitorScreenshotUrl: row['Competitor Screenshot']?.toString() || null,
+      sendingAccountName: row['Email']?.toString() || null,
+      website: row['Website']?.toString() || null,
     }));
 
     // save all rows to database
@@ -74,7 +77,12 @@ export const uploadExcel = async (req, res) => {
     });
   } catch (error) {
     console.error('upload excel error:', error);
-    return res.status(500).json({ error: 'Failed to upload and parse Excel file' });
+    console.error('error details:', error.message);
+    console.error('error stack:', error.stack);
+    return res.status(500).json({ 
+      error: 'Failed to upload and parse Excel file',
+      details: error.message 
+    });
   }
 };
 
@@ -169,9 +177,12 @@ export const generateDrafts = async (req, res) => {
       // convert sequelize model to plain object
       const row = rowModel.get({ plain: true });
       
-      // apply link conversion to screenshot URL if present
+      // apply link conversion to screenshot URLs if present
       if (row.clientScreenshotUrl) {
         row.clientScreenshotUrl = convertLink(row.clientScreenshotUrl);
+      }
+      if (row.competitorScreenshotUrl) {
+        row.competitorScreenshotUrl = convertLink(row.competitorScreenshotUrl);
       }
 
       const subject = replacePlaceholders(template.subject, row);
@@ -181,6 +192,7 @@ export const generateDrafts = async (req, res) => {
       // We'll wrap the whole body in a div and replace newlines with <br> for simplicity
       let htmlBody = `<div>${textBody.replace(/\n/g, '<br>')}</div>`;
 
+      // Handle client screenshot
       if (row.clientScreenshotUrl) {
         if (htmlBody.includes(row.clientScreenshotUrl)) {
           // Replace the URL text with the image tag
@@ -194,9 +206,24 @@ export const generateDrafts = async (req, res) => {
         }
       }
 
+      // Handle competitor screenshot
+      if (row.competitorScreenshotUrl) {
+        if (htmlBody.includes(row.competitorScreenshotUrl)) {
+          // Replace the URL text with the image tag
+          htmlBody = htmlBody.replace(
+            row.competitorScreenshotUrl,
+            `<br><img src="${row.competitorScreenshotUrl}" alt="Competitor Screenshot" style="max-width: 100%; height: auto;"><br>`
+          );
+        } else {
+          // Fallback: append if not found in body
+          htmlBody += `<br><br><img src="${row.competitorScreenshotUrl}" alt="Competitor Screenshot" style="max-width: 100%; height: auto;">`;
+        }
+      }
+
+
       return {
         row: index + 1,
-        to: '', // can add email column to Excel if needed
+        to: row.sendingAccountName || '', // Auto-populate recipient email from Excel
         subject,
         body: '', // Keep body empty as requested by user to only send HTML
         html: htmlBody,

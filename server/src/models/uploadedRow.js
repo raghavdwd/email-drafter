@@ -57,6 +57,31 @@ const UploadedRow = sequelize.define('UploadedRow', {
     field: 'sending_account_name',
     allowNull: true
   },
+  website: {
+    type: DataTypes.TEXT,
+    field: 'website',
+    allowNull: true
+  },
+  competitorName2: {
+    type: DataTypes.STRING,
+    field: 'competitor_name_2',
+    allowNull: true
+  },
+  competitorTraffic2: {
+    type: DataTypes.INTEGER,
+    field: 'competitor_traffic_2',
+    allowNull: true
+  },
+  competitorWebsite2: {
+    type: DataTypes.STRING,
+    field: 'competitor_website_2',
+    allowNull: true
+  },
+  competitorScreenshotUrl: {
+    type: DataTypes.TEXT,
+    field: 'competitor_screenshot_url',
+    allowNull: true
+  },
   createdAt: {
     type: DataTypes.DATE,
     field: 'created_at',
