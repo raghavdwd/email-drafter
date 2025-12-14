@@ -158,30 +158,9 @@ Use these placeholders in your email templates:
 
 When you include screenshot placeholders like `{{Client Screenshot}}` or `{{Competitor Screenshot}}`, the system will:
 
-1. Convert Gyazo or other screenshot URLs to direct image links
-2. Embed the image **inline** in the email HTML body (not as a separate attachment)
-3. Display the image directly in the email content when opened
-4. Apply responsive styling (max-width: 600px, border, rounded corners)
+1. Convert the Gyazo or other screenshot URLs to direct image links
+2. Replace the placeholder with an HTML `<img>` tag
+3. Embed the image directly in the email draft
+4. Apply responsive styling (max-width: 100%, auto height)
 
-**Important Notes:**
-
-- Images appear **inline in the email body**, not as separate PDF/file attachments
-- Gmail's draft list preview may not show images for security reasons, but they **will display** when the draft is opened
-- Recipients will see the images embedded in the email when they open it
-- Works with Gyazo links (automatically converted to direct image URLs)
-
-**Tip:** Don't include the screenshot URL as plain text in your template. Just use the placeholder where you want the image to appear, and it will be embedded automatically.
-
-**Example:**
-
-```
-Here's your website analysis:
-
-{{Client Screenshot}}
-
-Compare with your competitor:
-
-{{Competitor Screenshot}}
-```
-
-This will embed both images inline in the email body at those exact positions.
+**Note**: Make sure your Excel file contains valid screenshot URLs (Gyazo, Imgur, or direct image links).
