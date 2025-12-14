@@ -23,7 +23,7 @@ const AdminLogin = () => {
         password,
       });
 
-      loginAdmin(response.data.admin);
+      loginAdmin(response.data.admin, response.data.token);
       navigate('/admin/dashboard');
     } catch (err) {
       setError(err.response?.data?.error || 'login failed');

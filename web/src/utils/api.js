@@ -3,7 +3,7 @@ import axios from 'axios';
 // create axios instance with base url
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3000',
-  withCredentials: true,
+  // Removed withCredentials since we're using JWT tokens, not cookies
 });
 
 // add authorization header if token exists

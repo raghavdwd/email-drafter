@@ -16,27 +16,29 @@ export const adminLogin = async (req, res) => {
       email === process.env.ADMIN_EMAIL &&
       password === process.env.ADMIN_PASSWORD
     ) {
-      // create session for admin
+      // Generate JWT token for admin
+      const token = jwt.sign(
+        {
+          id: 'admin',
+          email,
+          role: 'admin'
+        },
+        process.env.JWT_SECRET,
+        { expiresIn: '7d' }
+      );
+
       const adminUser = {
         id: 'admin',
         email,
         role: 'admin'
       };
 
-      req.login(adminUser, (err) => {
-        if (err) {
-          return res.status(500).json({ error: 'login failed' });
-        }
-        return res.status(200).json({
-          admin: adminUser,
-        });
+      return res.status(200).json({
+        admin: adminUser,
+        token,
       });
-    }
-
-    // return res.status(401).json({ error: 'invalid credentials' }); -> Moved this inside else if needed, or structured differently.
-    // simpler to just put else here or remove the return above.
-    else {
-        return res.status(401).json({ error: 'invalid credentials' });
+    } else {
+      return res.status(401).json({ error: 'invalid credentials' });
     }
   } catch (error) {
     console.error('admin login error:', error);

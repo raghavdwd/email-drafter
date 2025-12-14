@@ -10,32 +10,53 @@ export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // load user from session on mount
+  // Load user from token on mount
   useEffect(() => {
-    const checkSession = async () => {
-      try {
-        const res = await api.get('/auth/me');
-        if (res.data && res.data.user) {
-          setUser(res.data.user);
-          // If admin logic is needed, handle likely via a separate role check or distinct endpoint
-          if (res.data.user.role === 'admin') {
-            setAdmin(res.data.user);
-          }
+    const checkAuth = async () => {
+      // Check for token in localStorage first
+      const storedToken = localStorage.getItem('token');
+      
+      // Also check URL for token (from OAuth redirect)
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlToken = urlParams.get('token');
+      
+      // Use token from URL if available, otherwise use stored token
+      const token = urlToken || storedToken;
+      
+      if (token) {
+        // Store token if it came from URL
+        if (urlToken) {
+          localStorage.setItem('token', urlToken);
+          setToken(urlToken);
+          // Remove token from URL
+          window.history.replaceState({}, '', window.location.pathname);
         } else {
-          console.log('No user data in response');
+          setToken(token);
         }
-      } catch (error) {
-        // Not logged in or session expired
-        console.log('No active session:', error.response?.status, error.response?.data);
-        // Clear any stale state
-        setUser(null);
-        setAdmin(null);
-        setToken(null);
-      } finally {
-        setLoading(false);
+        
+        // Verify token and get user data
+        try {
+          // Token is automatically sent via Authorization header by API interceptor
+          const res = await api.get('/auth/me');
+          if (res.data && res.data.user) {
+            setUser(res.data.user);
+            if (res.data.user.role === 'admin') {
+              setAdmin(res.data.user);
+            }
+          }
+        } catch (error) {
+          // Token invalid or expired
+          console.log('Token verification failed:', error.response?.status, error.response?.data);
+          localStorage.removeItem('token');
+          setToken(null);
+          setUser(null);
+          setAdmin(null);
+        }
       }
+      
+      setLoading(false);
     };
-    checkSession();
+    checkAuth();
   }, []);
 
   // login function (mostly to update local state after successful auth)
@@ -50,8 +71,14 @@ export const AuthProvider = ({ children }) => {
   };
 
   // login function for admin
-  const loginAdmin = (adminData) => {
-    setAdmin(adminData);
+  const loginAdmin = (adminData, token) => {
+    if (token) {
+      setToken(token);
+      localStorage.setItem('token', token);
+    }
+    if (adminData) {
+      setAdmin(adminData);
+    }
   };
 
   // logout function

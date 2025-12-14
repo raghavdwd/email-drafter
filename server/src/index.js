@@ -67,18 +67,44 @@ const getCookieDomain = () => {
   if (!isProduction || !process.env.FRONTEND_URL) return undefined;
   
   try {
-    const url = new URL(process.env.FRONTEND_URL);
-    const hostname = url.hostname;
+    const frontendUrl = new URL(process.env.FRONTEND_URL);
+    const backendUrl = process.env.BACKEND_URL ? new URL(process.env.BACKEND_URL) : null;
     
-    // Only set domain if it's a proper domain (not localhost or IP)
-    // For same root domain (e.g., app.example.com and api.example.com)
-    // you might want to set domain to '.example.com'
-    // For now, we'll let the browser handle it automatically
+    // If frontend and backend are on the same domain, don't set domain
+    // This allows cookie to work on the same domain
+    if (backendUrl && frontendUrl.hostname === backendUrl.hostname) {
+      return undefined; // Same domain, no need to set domain
+    }
+    
+    // If different domains but same root (e.g., app.example.com and api.example.com)
+    // Extract root domain
+    const hostname = frontendUrl.hostname;
+    const parts = hostname.split('.');
+    if (parts.length >= 2) {
+      // Return root domain with leading dot (e.g., '.example.com')
+      return '.' + parts.slice(-2).join('.');
+    }
+    
     return undefined;
   } catch (e) {
     return undefined;
   }
 };
+
+// Determine if frontend and backend are on same domain
+const isSameDomain = () => {
+  if (!isProduction || !process.env.FRONTEND_URL || !process.env.BACKEND_URL) return false;
+  try {
+    const frontendUrl = new URL(process.env.FRONTEND_URL);
+    const backendUrl = new URL(process.env.BACKEND_URL);
+    return frontendUrl.hostname === backendUrl.hostname;
+  } catch (e) {
+    return false;
+  }
+};
+
+// Use 'lax' for same domain, 'none' for cross-domain
+const sameSiteValue = isProduction && !isSameDomain() ? 'none' : 'lax';
 
 app.use(session({
   name: "connect.sid",
@@ -89,7 +115,7 @@ app.use(session({
   cookie: {
     httpOnly: true,
     secure: isProduction, // Requires HTTPS in production
-    sameSite: isProduction ? 'none' : 'lax', // 'none' requires secure: true
+    sameSite: sameSiteValue, // 'lax' for same domain, 'none' for cross-domain
     maxAge: 24 * 60 * 60 * 1000, // 24 hours
     domain: getCookieDomain(), // Set if frontend/backend share root domain
     path: '/', // Explicitly set path to root

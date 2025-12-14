@@ -5,7 +5,7 @@ import { uploadExcel, getTemplates, generateDrafts, checkGmailConnection, connec
 
 // user dashboard for approved users
 const Dashboard = () => {
-  const { user, logout } = useContext(AuthContext);
+  const { user, logout, token, login } = useContext(AuthContext);
   const navigate = useNavigate();
 
   // state management
@@ -20,6 +20,18 @@ const Dashboard = () => {
   const [success, setSuccess] = useState('');
   const [gmailConnected, setGmailConnected] = useState(false);
   const [checkingConnection, setCheckingConnection] = useState(true);
+
+  // Extract token from URL if present (from OAuth redirect)
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlToken = urlParams.get('token');
+    
+    if (urlToken && !token) {
+      // Token from OAuth redirect - store it and remove from URL
+      login(urlToken, null);
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, [token, login]);
 
   // fetch templates and check Gmail connection on mount
   useEffect(() => {
