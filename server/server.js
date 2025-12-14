@@ -28,6 +28,13 @@ app.use(cors({
 }));
 app.use(express.json());
 
+// Debug: Log incoming cookies
+app.use((req, res, next) => {
+  console.log('📨 Incoming request:', req.method, req.path);
+  console.log('   Cookie header:', req.headers.cookie || 'NO COOKIES');
+  next();
+});
+
 const isProduction = process.env.NODE_ENV === 'production';
 
 app.use(session({
