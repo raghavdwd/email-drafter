@@ -61,13 +61,33 @@ router.get(
         }
         
         // User is approved - save session and redirect to dashboard
-        // Session should auto-save on redirect, but we'll ensure it's saved
+        // Explicitly save session and ensure cookie is set
         req.session.save((err) => {
           if (err) {
             console.error('Session save error before redirect:', err);
+            return res.redirect((process.env.FRONTEND_URL || "http://localhost:5173") + "/login?error=session_save_failed");
           }
+          
+          // Log session info before redirect
+          console.log('Session saved - Session ID:', req.sessionID);
+          console.log('Cookie settings:', {
+            domain: req.session.cookie.domain,
+            path: req.session.cookie.path,
+            secure: req.session.cookie.secure,
+            sameSite: req.session.cookie.sameSite,
+            httpOnly: req.session.cookie.httpOnly
+          });
+          
+          // Ensure cookie is set by manually setting it if needed
+          // The session middleware should handle this, but we'll log it
+          console.log('Cookie should be set in response headers');
+          
           // Redirect after session is saved
-          res.redirect((process.env.FRONTEND_URL || "http://localhost:5173") + "/dashboard");
+          const redirectUrl = (process.env.FRONTEND_URL || "http://localhost:5173") + "/dashboard";
+          console.log('Redirecting to:', redirectUrl);
+          
+          // Use 302 redirect to ensure cookie is sent
+          res.status(302).location(redirectUrl).end();
         });
       } else {
         console.error('No user in request after authentication');
@@ -87,6 +107,15 @@ router.get("/me", async (req, res) => {
   console.log('GET /auth/me - User ID:', req.user?.id);
   console.log('GET /auth/me - User Status:', req.user?.status);
   console.log('GET /auth/me - Cookies:', req.headers.cookie);
+  console.log('GET /auth/me - Origin:', req.headers.origin);
+  console.log('GET /auth/me - Referer:', req.headers.referer);
+  
+  // Check if session exists in store
+  if (req.sessionID) {
+    console.log('GET /auth/me - Session exists in store');
+  } else {
+    console.log('GET /auth/me - No session ID found');
+  }
   
   if (req.isAuthenticated() && req.user) {
     try {
@@ -137,6 +166,17 @@ router.get("/logout", (req, res) => {
       res.clearCookie('connect.sid');
       res.redirect(process.env.FRONTEND_URL || "http://localhost:5173");
     });
+  });
+});
+
+// Test endpoint to check session
+router.get("/test-session", (req, res) => {
+  res.json({
+    sessionID: req.sessionID,
+    isAuthenticated: req.isAuthenticated(),
+    user: req.user,
+    cookies: req.headers.cookie,
+    sessionCookie: req.session.cookie
   });
 });
 

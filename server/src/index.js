@@ -41,15 +41,24 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// Debug: Log incoming cookies (optional in production)
-if (process.env.NODE_ENV !== 'production') {
-  app.use((req, res, next) => {
-    console.log('📨 Incoming request:', req.method, req.path);
-    console.log('   Cookie header:', req.headers.cookie || 'NO COOKIES');
-    console.log('   Origin:', req.headers.origin);
-    next();
-  });
-}
+// Debug: Log incoming cookies and outgoing Set-Cookie headers
+app.use((req, res, next) => {
+  // Log incoming cookies
+  console.log('📨 Incoming request:', req.method, req.path);
+  console.log('   Cookie header:', req.headers.cookie || 'NO COOKIES');
+  console.log('   Origin:', req.headers.origin);
+  
+  // Intercept Set-Cookie headers to log them
+  const originalSetHeader = res.setHeader.bind(res);
+  res.setHeader = function(name, value) {
+    if (name.toLowerCase() === 'set-cookie') {
+      console.log('🍪 Setting cookie:', value);
+    }
+    return originalSetHeader(name, value);
+  };
+  
+  next();
+});
 
 const isProduction = process.env.NODE_ENV === 'production';
 
@@ -83,6 +92,7 @@ app.use(session({
     sameSite: isProduction ? 'none' : 'lax', // 'none' requires secure: true
     maxAge: 24 * 60 * 60 * 1000, // 24 hours
     domain: getCookieDomain(), // Set if frontend/backend share root domain
+    path: '/', // Explicitly set path to root
   }
 }));
 
