@@ -28,16 +28,18 @@ app.use(cors({
 }));
 app.use(express.json());
 
+const isProduction = process.env.NODE_ENV === 'production';
+
 app.use(session({
-  name: "connect.sid", // explicit name helps debugging
-  secret: process.env.JWT_SECRET,
+  name: "connect.sid",
+  secret: process.env.JWT_SECRET || 'keyboard cat',
   resave: false,
   saveUninitialized: false,
-  proxy: true, //  REQUIRED in prod behind proxy
+  proxy: isProduction, // Only trust proxy in production
   cookie: {
     httpOnly: true,
-    secure: true,          // MUST be true in prod
-    sameSite: "none",      // REQUIRED for Google OAuth
+    secure: isProduction, // Only HTTPS in production
+    sameSite: isProduction ? 'none' : 'lax', // Cross-site only in production
     maxAge: 24 * 60 * 60 * 1000
   }
 }));

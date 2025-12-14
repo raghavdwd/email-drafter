@@ -23,12 +23,22 @@ router.get(
     failureRedirect: (process.env.FRONTEND_URL || "http://localhost:5173") + "/login",
   }),
   (req, res) => {
+    // Debug logging
+    console.log('✓ OAuth callback successful');
+    console.log('User:', req.user?.email);
+    console.log('Session ID:', req.sessionID);
+    console.log('Is Authenticated:', req.isAuthenticated());
+    
     // Successful authentication, redirect home.
     res.redirect((process.env.FRONTEND_URL || "http://localhost:5173") + "/dashboard");
   }
 );
 
 router.get("/me", (req, res) => {
+  console.log('GET /auth/me - Session ID:', req.sessionID);
+  console.log('GET /auth/me - Is Authenticated:', req.isAuthenticated());
+  console.log('GET /auth/me - User:', req.user?.email);
+  
   if (req.isAuthenticated()) {
     return res.json({ user: req.user });
   }
