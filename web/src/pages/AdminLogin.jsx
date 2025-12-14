@@ -23,7 +23,19 @@ const AdminLogin = () => {
         password,
       });
 
+      // Store token and admin data
       loginAdmin(response.data.admin, response.data.token);
+      
+      // Verify token and get admin data to ensure state is set
+      try {
+        const meResponse = await api.get('/auth/me');
+        if (meResponse.data && meResponse.data.user) {
+          loginAdmin(meResponse.data.user, response.data.token);
+        }
+      } catch (meErr) {
+        console.error('Failed to verify admin token:', meErr);
+      }
+      
       navigate('/admin/dashboard');
     } catch (err) {
       setError(err.response?.data?.error || 'login failed');

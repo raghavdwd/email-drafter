@@ -79,6 +79,13 @@ router.get("/me", verifyToken, async (req, res) => {
   try {
     // User is already verified by verifyToken middleware
     // req.user is set by the middleware
+    
+    // If admin user, return admin object directly
+    if (req.user.id === 'admin' && req.user.role === 'admin') {
+      return res.json({ user: req.user });
+    }
+    
+    // For regular users, fetch from database
     const user = await User.findByPk(req.user.id, {
       attributes: ['id', 'name', 'email', 'photo', 'status', 'gmailConnected', 'createdAt']
     });
