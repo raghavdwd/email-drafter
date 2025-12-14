@@ -29,15 +29,19 @@ app.use(cors({
 app.use(express.json());
 
 app.use(session({
-  secret: process.env.JWT_SECRET || 'keyboard cat',
+  name: "connect.sid", // explicit name helps debugging
+  secret: process.env.JWT_SECRET,
   resave: false,
   saveUninitialized: false,
+  proxy: true, //  REQUIRED in prod behind proxy
   cookie: {
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    httpOnly: true,
+    secure: true,          // MUST be true in prod
+    sameSite: "none",      // REQUIRED for Google OAuth
+    maxAge: 24 * 60 * 60 * 1000
   }
 }));
+
 
 app.use(passport.initialize());
 app.use(passport.session());
