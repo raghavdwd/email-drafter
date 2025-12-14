@@ -189,10 +189,9 @@ export const generateDrafts = async (req, res) => {
       const textBody = replacePlaceholders(template.body, row);
       
       // Simple text-to-HTML conversion: wrap paragraphs or replace newlines
-      // We'll wrap the whole body in a div and replace newlines with <br> for simplicity
       let htmlBody = `<div>${textBody.replace(/\n/g, '<br>')}</div>`;
 
-      // Handle client screenshot
+      // Handle client screenshot embedding in HTML
       if (row.clientScreenshotUrl) {
         if (htmlBody.includes(row.clientScreenshotUrl)) {
           // Replace the URL text with the image tag
@@ -206,7 +205,7 @@ export const generateDrafts = async (req, res) => {
         }
       }
 
-      // Handle competitor screenshot
+      // Handle competitor screenshot embedding in HTML
       if (row.competitorScreenshotUrl) {
         if (htmlBody.includes(row.competitorScreenshotUrl)) {
           // Replace the URL text with the image tag
@@ -220,6 +219,22 @@ export const generateDrafts = async (req, res) => {
         }
       }
 
+      // Build attachments array for screenshots
+      const attachments = [];
+      
+      if (row.clientScreenshotUrl) {
+        attachments.push({
+          filename: 'client-screenshot.png',
+          path: row.clientScreenshotUrl
+        });
+      }
+      
+      if (row.competitorScreenshotUrl) {
+        attachments.push({
+          filename: 'competitor-screenshot.png',
+          path: row.competitorScreenshotUrl
+        });
+      }
 
       return {
         row: index + 1,
@@ -227,6 +242,7 @@ export const generateDrafts = async (req, res) => {
         subject,
         body: '', // Keep body empty as requested by user to only send HTML
         html: htmlBody,
+        attachments,
       };
     });
 
