@@ -86,8 +86,8 @@ router.get(
           const redirectUrl = (process.env.FRONTEND_URL || "http://localhost:5173") + "/dashboard";
           console.log('Redirecting to:', redirectUrl);
           
-          // Use 302 redirect to ensure cookie is sent
-          res.status(302).location(redirectUrl).end();
+          // Use res.redirect() which properly handles cookies
+          res.redirect(redirectUrl);
         });
       } else {
         console.error('No user in request after authentication');
