@@ -8,6 +8,7 @@ import {
   disconnectGmail,
 } from "../controllers/auth.controller.js";
 import { verifyToken } from "../middleware/auth.middleware.js";
+import User from "../models/user.js";
 
 const router = express.Router();
 
@@ -34,17 +35,44 @@ router.get(
       console.log('Session ID:', req.sessionID);
       console.log('Is Authenticated:', req.isAuthenticated());
       
-      // Check if user is pending approval
-      if (req.user && req.user.status === 'pending') {
-        // Logout the user since they're not approved yet
-        req.logout((err) => {
-          if (err) console.error('Logout error:', err);
+      // Refresh user from database to get latest status
+      // This ensures we have the most up-to-date approval status
+      if (req.user && req.user.id) {
+        const freshUser = await User.findByPk(req.user.id);
+        
+        if (!freshUser) {
+          console.error('User not found in database');
+          req.logout((err) => {
+            if (err) console.error('Logout error:', err);
+          });
+          return res.redirect((process.env.FRONTEND_URL || "http://localhost:5173") + "/login?error=user_not_found");
+        }
+        
+        // Update req.user with fresh data
+        req.user = freshUser;
+        
+        // Check if user is pending approval
+        if (freshUser.status === 'pending') {
+          // Logout the user since they're not approved yet
+          req.logout((err) => {
+            if (err) console.error('Logout error:', err);
+          });
+          return res.redirect((process.env.FRONTEND_URL || "http://localhost:5173") + "/request-approval");
+        }
+        
+        // User is approved - save session and redirect to dashboard
+        // Session should auto-save on redirect, but we'll ensure it's saved
+        req.session.save((err) => {
+          if (err) {
+            console.error('Session save error before redirect:', err);
+          }
+          // Redirect after session is saved
+          res.redirect((process.env.FRONTEND_URL || "http://localhost:5173") + "/dashboard");
         });
-        return res.redirect((process.env.FRONTEND_URL || "http://localhost:5173") + "/request-approval");
+      } else {
+        console.error('No user in request after authentication');
+        res.redirect((process.env.FRONTEND_URL || "http://localhost:5173") + "/login?error=no_user");
       }
-      
-      // User is approved, redirect to dashboard
-      res.redirect((process.env.FRONTEND_URL || "http://localhost:5173") + "/dashboard");
     } catch (error) {
       console.error('OAuth callback error:', error);
       res.redirect((process.env.FRONTEND_URL || "http://localhost:5173") + "/login?error=callback_failed");
@@ -52,13 +80,45 @@ router.get(
   }
 );
 
-router.get("/me", (req, res) => {
+router.get("/me", async (req, res) => {
   console.log('GET /auth/me - Session ID:', req.sessionID);
   console.log('GET /auth/me - Is Authenticated:', req.isAuthenticated());
   console.log('GET /auth/me - User:', req.user?.email);
+  console.log('GET /auth/me - User ID:', req.user?.id);
+  console.log('GET /auth/me - User Status:', req.user?.status);
+  console.log('GET /auth/me - Cookies:', req.headers.cookie);
   
-  if (req.isAuthenticated()) {
-    return res.json({ user: req.user });
+  if (req.isAuthenticated() && req.user) {
+    try {
+      // If user is a Sequelize instance, convert to plain object
+      // Also refresh from database to ensure we have latest status
+      let userData;
+      
+      if (req.user.id && typeof req.user.id === 'number') {
+        // Regular user - refresh from database
+        const freshUser = await User.findByPk(req.user.id, {
+          attributes: ['id', 'name', 'email', 'photo', 'status', 'gmailConnected', 'createdAt']
+        });
+        
+        if (!freshUser) {
+          return res.status(401).json({ error: "user not found" });
+        }
+        
+        // Convert Sequelize instance to plain object
+        userData = freshUser.get({ plain: true });
+      } else if (req.user.id === 'admin') {
+        // Admin user - return as is
+        userData = req.user;
+      } else {
+        // Fallback: try to convert current user object
+        userData = req.user.get ? req.user.get({ plain: true }) : req.user;
+      }
+      
+      return res.json({ user: userData });
+    } catch (error) {
+      console.error('Error in /auth/me:', error);
+      return res.status(500).json({ error: "failed to fetch user data" });
+    }
   }
   return res.status(401).json({ error: "no active session" });
 });

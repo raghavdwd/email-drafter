@@ -15,16 +15,22 @@ export const AuthProvider = ({ children }) => {
     const checkSession = async () => {
       try {
         const res = await api.get('/auth/me');
-        if (res.data.user) {
+        if (res.data && res.data.user) {
           setUser(res.data.user);
           // If admin logic is needed, handle likely via a separate role check or distinct endpoint
-           if (res.data.user.role === 'admin') {
-             setAdmin(res.data.user);
-           }
+          if (res.data.user.role === 'admin') {
+            setAdmin(res.data.user);
+          }
+        } else {
+          console.log('No user data in response');
         }
       } catch (error) {
         // Not logged in or session expired
-        console.log('No active session');
+        console.log('No active session:', error.response?.status, error.response?.data);
+        // Clear any stale state
+        setUser(null);
+        setAdmin(null);
+        setToken(null);
       } finally {
         setLoading(false);
       }
