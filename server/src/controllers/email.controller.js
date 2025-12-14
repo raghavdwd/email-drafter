@@ -188,61 +188,57 @@ export const generateDrafts = async (req, res) => {
       const subject = replacePlaceholders(template.subject, row);
       const textBody = replacePlaceholders(template.body, row);
       
-      // Simple text-to-HTML conversion: wrap paragraphs or replace newlines
-      let htmlBody = `<div>${textBody.replace(/\n/g, '<br>')}</div>`;
-
-      // Handle client screenshot embedding in HTML
+      // Create HTML body with proper Gmail-compatible structure
+      let htmlBody = textBody.replace(/\n/g, '<br>');
+      
+      // Embed client screenshot inline if present
       if (row.clientScreenshotUrl) {
+        const imgTag = `<div style="margin: 20px 0;"><img src="${row.clientScreenshotUrl}" alt="Client Screenshot" style="max-width: 600px; width: 100%; height: auto; display: block; border: 1px solid #ddd; border-radius: 4px;"></div>`;
+        
+        // If the URL is mentioned in text, replace it with the image
         if (htmlBody.includes(row.clientScreenshotUrl)) {
-          // Replace the URL text with the image tag
-          htmlBody = htmlBody.replace(
-            row.clientScreenshotUrl,
-            `<br><img src="${row.clientScreenshotUrl}" alt="Client Screenshot" style="max-width: 100%; height: auto;"><br>`
-          );
+          htmlBody = htmlBody.replace(row.clientScreenshotUrl, imgTag);
         } else {
-          // Fallback: append if not found in body
-          htmlBody += `<br><br><img src="${row.clientScreenshotUrl}" alt="Client Screenshot" style="max-width: 100%; height: auto;">`;
+          // Otherwise append at the end
+          htmlBody += imgTag;
         }
       }
 
-      // Handle competitor screenshot embedding in HTML
+      // Embed competitor screenshot inline if present
       if (row.competitorScreenshotUrl) {
+        const imgTag = `<div style="margin: 20px 0;"><img src="${row.competitorScreenshotUrl}" alt="Competitor Screenshot" style="max-width: 600px; width: 100%; height: auto; display: block; border: 1px solid #ddd; border-radius: 4px;"></div>`;
+        
+        // If the URL is mentioned in text, replace it with the image
         if (htmlBody.includes(row.competitorScreenshotUrl)) {
-          // Replace the URL text with the image tag
-          htmlBody = htmlBody.replace(
-            row.competitorScreenshotUrl,
-            `<br><img src="${row.competitorScreenshotUrl}" alt="Competitor Screenshot" style="max-width: 100%; height: auto;"><br>`
-          );
+          htmlBody = htmlBody.replace(row.competitorScreenshotUrl, imgTag);
         } else {
-          // Fallback: append if not found in body
-          htmlBody += `<br><br><img src="${row.competitorScreenshotUrl}" alt="Competitor Screenshot" style="max-width: 100%; height: auto;">`;
+          // Otherwise append at the end
+          htmlBody += imgTag;
         }
       }
-
-      // Build attachments array for screenshots
-      const attachments = [];
       
-      if (row.clientScreenshotUrl) {
-        attachments.push({
-          filename: 'client-screenshot.png',
-          path: row.clientScreenshotUrl
-        });
-      }
-      
-      if (row.competitorScreenshotUrl) {
-        attachments.push({
-          filename: 'competitor-screenshot.png',
-          path: row.competitorScreenshotUrl
-        });
-      }
+      // Wrap in a proper HTML structure
+      const finalHtml = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; padding: 20px;">
+  ${htmlBody}
+</body>
+</html>
+      `.trim();
 
       return {
         row: index + 1,
         to: row.sendingAccountName || '', // Auto-populate recipient email from Excel
         subject,
         body: '', // Keep body empty as requested by user to only send HTML
-        html: htmlBody,
-        attachments,
+        html: finalHtml,
+        clientScreenshotUrl: row.clientScreenshotUrl || null,
+        competitorScreenshotUrl: row.competitorScreenshotUrl || null,
       };
     });
 
