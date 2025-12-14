@@ -33,8 +33,14 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   // login function (mostly to update local state after successful auth)
-  const login = (userData) => {
-    setUser(userData);
+  const login = (token, userData) => {
+    if (token) {
+      setToken(token);
+      localStorage.setItem('token', token);
+    }
+    if (userData) {
+      setUser(userData);
+    }
   };
 
   // login function for admin
