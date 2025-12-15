@@ -172,8 +172,8 @@ export const generateDrafts = async (req, res) => {
     const { createDraftsInBatch } = await import('../utils/gmailService.js');
     const { convertLink } = await import('../utils/linkConvert.js');
 
-    // prepare drafts data
-    const draftsData = rows.map((rowModel, index) => {
+    // prepare drafts data with inline image attachments
+    const draftsData = await Promise.all(rows.map(async (rowModel, index) => {
       // convert sequelize model to plain object
       const row = rowModel.get({ plain: true });
       
@@ -188,47 +188,91 @@ export const generateDrafts = async (req, res) => {
       const subject = replacePlaceholders(template.subject, row);
       const textBody = replacePlaceholders(template.body, row);
       
-      // Simple text-to-HTML conversion: wrap paragraphs or replace newlines
-      // We'll wrap the whole body in a div and replace newlines with <br> for simplicity
-      let htmlBody = `<div>${textBody.replace(/\n/g, '<br>')}</div>`;
-
-      // Handle client screenshot
+      // Prepare attachments array for inline images
+      const attachments = [];
+      let htmlBody = textBody.replace(/\n/g, '<br>');
+      
+      // Fetch and attach client screenshot if present
       if (row.clientScreenshotUrl) {
-        if (htmlBody.includes(row.clientScreenshotUrl)) {
-          // Replace the URL text with the image tag
-          htmlBody = htmlBody.replace(
-            row.clientScreenshotUrl,
-            `<br><img src="${row.clientScreenshotUrl}" alt="Client Screenshot" style="max-width: 100%; height: auto;"><br>`
-          );
-        } else {
-          // Fallback: append if not found in body
-          htmlBody += `<br><br><img src="${row.clientScreenshotUrl}" alt="Client Screenshot" style="max-width: 100%; height: auto;">`;
+        try {
+          const response = await fetch(row.clientScreenshotUrl);
+          if (response.ok) {
+            const imageBuffer = Buffer.from(await response.arrayBuffer());
+            const cid = `client_screenshot_${index}@email`;
+            
+            attachments.push({
+              filename: 'image.png',
+              content: imageBuffer,
+              cid: cid,
+              contentDisposition: 'inline'
+            });
+            
+            // Reference image in HTML using CID
+            const imgTag = `<div style="margin: 20px 0;"><img src="cid:${cid}" alt="Client Screenshot" style="max-width: 600px; width: 100%; height: auto; display: block; border: 1px solid #ddd; border-radius: 4px;"></div>`;
+            
+            if (htmlBody.includes(row.clientScreenshotUrl)) {
+              htmlBody = htmlBody.replace(row.clientScreenshotUrl, imgTag);
+            } else {
+              htmlBody += imgTag;
+            }
+          }
+        } catch (error) {
+          console.error(`Failed to fetch client screenshot for row ${index + 1}:`, error.message);
         }
       }
 
-      // Handle competitor screenshot
+      // Fetch and attach competitor screenshot if present
       if (row.competitorScreenshotUrl) {
-        if (htmlBody.includes(row.competitorScreenshotUrl)) {
-          // Replace the URL text with the image tag
-          htmlBody = htmlBody.replace(
-            row.competitorScreenshotUrl,
-            `<br><img src="${row.competitorScreenshotUrl}" alt="Competitor Screenshot" style="max-width: 100%; height: auto;"><br>`
-          );
-        } else {
-          // Fallback: append if not found in body
-          htmlBody += `<br><br><img src="${row.competitorScreenshotUrl}" alt="Competitor Screenshot" style="max-width: 100%; height: auto;">`;
+        try {
+          const response = await fetch(row.competitorScreenshotUrl);
+          if (response.ok) {
+            const imageBuffer = Buffer.from(await response.arrayBuffer());
+            const cid = `competitor_screenshot_${index}@email`;
+            
+            attachments.push({
+              filename: 'competitor-screenshot.png',
+              content: imageBuffer,
+              cid: cid,
+              contentDisposition: 'inline'
+            });
+            
+            // Reference image in HTML using CID
+            const imgTag = `<div style="margin: 20px 0;"><img src="cid:${cid}" alt="Competitor Screenshot" style="max-width: 600px; width: 100%; height: auto; display: block; border: 1px solid #ddd; border-radius: 4px;"></div>`;
+            
+            if (htmlBody.includes(row.competitorScreenshotUrl)) {
+              htmlBody = htmlBody.replace(row.competitorScreenshotUrl, imgTag);
+            } else {
+              htmlBody += imgTag;
+            }
+          }
+        } catch (error) {
+          console.error(`Failed to fetch competitor screenshot for row ${index + 1}:`, error.message);
         }
       }
-
+      
+      // Wrap in a proper HTML structure
+      const finalHtml = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; padding: 20px;">
+  ${htmlBody}
+</body>
+</html>
+      `.trim();
 
       return {
         row: index + 1,
         to: row.sendingAccountName || '', // Auto-populate recipient email from Excel
         subject,
-        body: '', // Keep body empty as requested by user to only send HTML
-        html: htmlBody,
+        body: '', // Keep body empty to use HTML only
+        html: finalHtml,
+        attachments, // Include inline image attachments
       };
-    });
+    }));
 
     // create drafts using Gmail API
     // const { createDraftsInBatch } = await import('../utils/gmailService.js');

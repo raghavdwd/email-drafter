@@ -7,14 +7,16 @@ import nodemailer from 'nodemailer';
  * @param {string} subject - Email subject
  * @param {string} text - Email text body
  * @param {string} html - Email html body
+ * @param {Array} attachments - Array of attachment objects with cid and content
  * @returns {Promise<string>} - Encoded email message
  */
-const createEmailMessage = async (to, subject, text, html) => {
+const createEmailMessage = async (to, subject, text, html, attachments = []) => {
   const mailOptions = {
     to,
     subject,
     text,
     html,
+    attachments, // Inline attachments for images
   };
 
   // Create a MailComposer instance
@@ -44,10 +46,11 @@ const createEmailMessage = async (to, subject, text, html) => {
  * @param {string} subject - Email subject
  * @param {string} body - Email body (text)
  * @param {string} html - Email body (html)
+ * @param {Array} attachments - Array of attachment objects
  * @returns {Promise<Object>} - Draft object with id
  */
-export const createDraft = async (gmailClient, to, subject, body, html) => {
-  const encodedMessage = await createEmailMessage(to, subject, body, html);
+export const createDraft = async (gmailClient, to, subject, body, html, attachments = []) => {
+  const encodedMessage = await createEmailMessage(to, subject, body, html, attachments);
 
   const res = await gmailClient.users.drafts.create({
     userId: 'me',
@@ -64,7 +67,7 @@ export const createDraft = async (gmailClient, to, subject, body, html) => {
 /**
  * Create multiple drafts in batch
  * @param {Object} user - User object with Gmail tokens
- * @param {Array} draftsData - Array of {to, subject, body, html} objects
+ * @param {Array} draftsData - Array of {to, subject, body, html, attachments} objects
  * @returns {Promise<Array>} - Array of draft objects
  */
 export const createDraftsInBatch = async (user, draftsData) => {
@@ -78,7 +81,8 @@ export const createDraftsInBatch = async (user, draftsData) => {
         draftData.to || '',
         draftData.subject,
         draftData.body,
-        draftData.html
+        draftData.html,
+        draftData.attachments || []
       );
       createdDrafts.push({
         row: draftData.row,
