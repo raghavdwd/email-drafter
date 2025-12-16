@@ -82,6 +82,12 @@ const UploadedRow = sequelize.define('UploadedRow', {
     field: 'competitor_screenshot_url',
     allowNull: true
   },
+  rawData: {
+    type: DataTypes.TEXT,
+    field: 'raw_data',
+    allowNull: true,
+    comment: 'JSON string of all Excel columns for dynamic variable support'
+  },
   createdAt: {
     type: DataTypes.DATE,
     field: 'created_at',

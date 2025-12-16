@@ -28,15 +28,37 @@ export const getTemplates = async () => {
 };
 
 /**
+ * Get all templates with full details (for Variables Guide)
+ * @returns {Promise<{templates: Array}>}
+ */
+export const getAllTemplatesForUser = async () => {
+  const response = await api.get('/templates/all');
+  return response.data;
+};
+
+/**
+ * Get all variables for users (for Variables Guide)
+ * @returns {Promise<{variables: Array}>}
+ */
+export const getVariablesForUser = async () => {
+  const response = await api.get('/variables');
+  return response.data;
+};
+
+/**
  * Generate Gmail drafts (now creates actual drafts via API)
  * @param {string} fileId - File ID from upload
  * @param {number} templateId - Selected template ID
+ * @param {number} startRow - Start row number (optional, defaults to 1)
+ * @param {number} endRow - End row number (optional, defaults to all rows)
  * @returns {Promise<{message: string, drafts: Array, successCount: number, failCount: number}>}
  */
-export const generateDrafts = async (fileId, templateId) => {
+export const generateDrafts = async (fileId, templateId, startRow, endRow) => {
   const response = await api.post('/email/draft', {
     fileId,
     templateId,
+    startRow,
+    endRow
   });
   return response.data;
 };
@@ -119,6 +141,47 @@ export const updateTemplate = async (id, data) => {
 };
 
 /**
+ * Create template variable (admin)
+ * @param {object} data - Variable data {variableName, variableKey, variableType, description}
+ * @returns {Promise<{message: string, variable: object}>}
+ */
+export const createVariable = async (data) => {
+  const response = await api.post('/admin/variable', data);
+  return response.data;
+};
+
+/**
+ * Get all template variables (admin)
+ * @returns {Promise<{variables: Array}>}
+ */
+export const getAllVariablesAdmin = async () => {
+  const response = await api.get('/admin/variables');
+  return response.data;
+};
+
+/**
+ * Update template variable (admin)
+ * @param {number} id - Variable ID
+ * @param {object} data - Variable data {variableName, variableKey, variableType, description}
+ * @returns {Promise<{message: string, variable: object}>}
+ */
+export const updateVariable = async (id, data) => {
+  const response = await api.put(`/admin/variable/${id}`, data);
+  return response.data;
+};
+
+/**
+ * Delete template variable (admin)
+ * @param {number} id - Variable ID
+ * @returns {Promise<{message: string}>}
+ */
+export const deleteVariable = async (id) => {
+  const response = await api.delete(`/admin/variable/${id}`);
+  return response.data;
+};
+
+
+/**
  * Schedule emails to be sent with time interval
  * @param {string} fileId - File ID from upload
  * @param {number} templateId - Selected template ID
@@ -139,13 +202,17 @@ export const scheduleEmails = async (fileId, templateId, intervalSeconds) => {
  * @param {string} fileId - File ID from upload
  * @param {number} templateId - Selected template ID
  * @param {number} intervalSeconds - Interval between emails in seconds
+ * @param {number} startRow - Start row number (optional, defaults to 1)
+ * @param {number} endRow - End row number (optional, defaults to all rows)
  * @returns {Promise<{message: string, scheduledEmailId: number, totalCount: number, intervalSeconds: number}>}
  */
-export const sendEmailsNow = async (fileId, templateId, intervalSeconds) => {
+export const sendEmailsNow = async (fileId, templateId, intervalSeconds, startRow, endRow) => {
   const response = await api.post('/email/send-now', {
     fileId,
     templateId,
     intervalSeconds,
+    startRow,
+    endRow
   });
   return response.data;
 };
@@ -231,3 +298,15 @@ export const getUploadedFiles = async (page = 1, limit = 10) => {
     }
   };
 
+/**
+ * Validate template variables against Excel file data
+ * @param {string} fileId - File ID from upload
+ * @param {number} templateId - Template ID
+ * @returns {Promise<{variables: Array, summary: Object, availableColumns: Array}>}
+ */
+export const validateTemplateMapping = async (fileId, templateId) => {
+  const response = await api.get('/template/validate', {
+    params: { fileId, templateId }
+  });
+  return response.data;
+};

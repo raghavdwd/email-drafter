@@ -6,11 +6,13 @@ import AboutDev from './pages/AboutDev';
 import RequestApproval from './pages/RequestApproval';
 import Dashboard from './pages/Dashboard';
 import Profile from './pages/Profile';
+import VariablesGuide from './pages/VariablesGuide';
 import AdminLogin from './pages/AdminLogin';
 import AdminLayout from './layouts/AdminLayout';
 import AdminOverview from './pages/admin/AdminOverview';
 import AdminUsers from './pages/admin/AdminUsers';
 import AdminTemplates from './pages/admin/AdminTemplates';
+import AdminVariables from './pages/admin/AdminVariables';
 import GmailCallback from './pages/GmailCallback';
 import {
   ProtectedUserRoute,
@@ -42,6 +44,14 @@ const App = () => {
             </ProtectedUserRoute>
           }
         />
+        <Route
+          path="/variables-guide"
+          element={
+            <ProtectedUserRoute>
+              <VariablesGuide />
+            </ProtectedUserRoute>
+          }
+        />
         <Route path="/gmail-callback" element={<GmailCallback />} />
 
         {/* admin routes */}
@@ -59,6 +69,7 @@ const App = () => {
           <Route index element={<AdminOverview />} />
           <Route path="users" element={<AdminUsers />} />
           <Route path="templates" element={<AdminTemplates />} />
+          <Route path="variables" element={<AdminVariables />} />
         </Route>
 
         {/* catch all redirect */}

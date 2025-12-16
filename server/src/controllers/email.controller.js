@@ -49,23 +49,29 @@ export const uploadExcel = async (req, res) => {
     const fileId = uuidv4();
 
     // prepare rows for database
+    // Note: Excel columns should match variable display names (e.g., "First Name", "Company Name")
+    // Database still uses camelCase keys, but replacePlaceholders now looks for display names first
     const rows = data.map(row => ({
       fileId,
-      firstName: row['Name']?.toString() || null,
-      clientBusinessName: row['Company Name']?.toString() || null,
+      // Core fields - accepting both display names and legacy names
+      firstName: row['First Name'] || row['Name'] || null,
+      clientBusinessName: row['Client Business Name'] || row['Company Name'] || null,
       clientTraffic: row['Client Traffic'] ? parseInt(row['Client Traffic']) : null,
-      competitorName: row['Competitor Business Name 1']?.toString() || null,
-      // Handle both "Competitor traffic 1" (lowercase) and "Competitor Traffic 1" (uppercase)
-      competitorTraffic: row['Competitor traffic 1'] ? parseInt(row['Competitor traffic 1']) : (row['Competitor Traffic 1'] ? parseInt(row['Competitor Traffic 1']) : null),
-      competitorWebsite: row['Competitor website 1']?.toString() || row['Competitor Website 1']?.toString() || null,
-      competitorName2: row['Competitor Business Name 2']?.toString() || null,
+      competitorName: row['Competitor Name'] || row['Competitor Business Name 1'] || null,
+      competitorTraffic: row['Competitor Traffic'] || row['Competitor Traffic 1'] ? 
+        parseInt(row['Competitor Traffic'] || row['Competitor Traffic 1']) : null,
+      competitorWebsite: row['Competitor Website'] || row['Competitor Website 1'] || null,
+      competitorName2: row['Competitor Name 2'] || row['Competitor Business Name 2'] || null,
       competitorTraffic2: row['Competitor Traffic 2'] ? parseInt(row['Competitor Traffic 2']) : null,
-      competitorWebsite2: row['Competitor Website 2']?.toString() || null,
-      calendarLink: null, // not in new template
-      clientScreenshotUrl: row['Client Screenshot']?.toString() || null,
-      competitorScreenshotUrl: row['Competitor Screenshot']?.toString() || null,
-      sendingAccountName: row['Email']?.toString() || null,
-      website: row['Website']?.toString() || null,
+      competitorWebsite2: row['Competitor Website 2'] || null,
+      calendarLink: row['Calendar Link'] || null,
+      clientScreenshotUrl: row['Client Screenshot URL'] || row['Client Screenshot'] || null,
+      competitorScreenshotUrl: row['Competitor Screenshot URL'] || row['Competitor Screenshot'] || null,
+      sendingAccountName: row['Sending Account Name'] || row['Email'] || null,
+      website: row['Website'] || row['Client Website'] || null,
+      
+      // Store ALL Excel columns as JSON for dynamic variable support
+      rawData: JSON.stringify(row),
     }));
 
     // save all rows to database
@@ -102,6 +108,41 @@ export const getTemplates = async (req, res) => {
     return res.status(500).json({ error: 'Failed to fetch templates', details: error.message });
   }
 };
+
+/**
+ * Get all templates with full details for users (for Variables Guide)
+ */
+export const getAllTemplatesForUser = async (req, res) => {
+  try {
+    const templates = await EmailTemplate.findAll({
+      attributes: ['id', 'name', 'subject', 'body'],
+      order: [['createdAt', 'DESC']],
+    });
+
+    return res.status(200).json({ templates });
+  } catch (error) {
+    console.error('get all templates error:', error);
+    return res.status(500).json({ error: 'Failed to fetch templates' });
+  }
+};
+
+/**
+ * Get all template variables for users (for Variables Guide)
+ */
+export const getVariablesForUser = async (req, res) => {
+  try {
+    const { default: TemplateVariable } = await import('../models/templateVariable.js');
+    const variables = await TemplateVariable.findAll({
+      order: [['variableName', 'ASC']],
+    });
+
+    return res.status(200).json({ variables });
+  } catch (error) {
+    console.error('get variables error:', error);
+    return res.status(500).json({ error: 'Failed to fetch variables' });
+  }
+};
+
 
 /**
  * Generate Gmail drafts using Gmail API
@@ -159,13 +200,27 @@ export const generateDrafts = async (req, res) => {
     }
 
     // fetch all rows for this fileId
-    const rows = await UploadedRow.findAll({
+    const allRows = await UploadedRow.findAll({
       where: { fileId },
       order: [['id', 'ASC']],
     });
 
-    if (rows.length === 0) {
+    if (allRows.length === 0) {
       return res.status(404).json({ error: 'No rows found for this fileId' });
+    }
+
+    // Apply row range filtering if provided
+    const { startRow, endRow } = req.body;
+    let rows = allRows;
+    
+    if (startRow !== undefined || endRow  !== undefined) {
+      const start = Math.max(1, parseInt(startRow) || 1) - 1; // Convert to 0-indexed
+      const end = Math.min(allRows.length, parseInt(endRow) || allRows.length); // Inclusive
+      rows = allRows.slice(start, end);
+      
+      if (rows.length === 0) {
+        return res.status(400).json({ error: 'Invalid row range specified' });
+      }
     }
 
     // create drafts using Gmail API
@@ -177,76 +232,54 @@ export const generateDrafts = async (req, res) => {
       // convert sequelize model to plain object
       const row = rowModel.get({ plain: true });
       
-      // apply link conversion to screenshot URLs if present
-      if (row.clientScreenshotUrl) {
-        row.clientScreenshotUrl = convertLink(row.clientScreenshotUrl);
-      }
-      if (row.competitorScreenshotUrl) {
-        row.competitorScreenshotUrl = convertLink(row.competitorScreenshotUrl);
-      }
-
-      const subject = replacePlaceholders(template.subject, row);
-      const textBody = replacePlaceholders(template.body, row);
+      // Replace placeholders - returns text and list of images to embed
+      const subjectResult = await replacePlaceholders(template.subject, row);
+      const bodyResult = await replacePlaceholders(template.body, row);
+      
+      const subject = typeof subjectResult === 'string' ? subjectResult : subjectResult.text;
+      const textBody = typeof bodyResult === 'string' ? bodyResult : bodyResult.text;
+      const imagesToEmbed = bodyResult.images || [];
       
       // Prepare attachments array for inline images
       const attachments = [];
       let htmlBody = textBody.replace(/\n/g, '<br>');
       
-      // Fetch and attach client screenshot if present
-      if (row.clientScreenshotUrl) {
+      // Process image variables
+      for (let imgIndex = 0; imgIndex < imagesToEmbed.length; imgIndex++) {
+        const imageInfo = imagesToEmbed[imgIndex];
+        const imageUrl = imageInfo.url;
+        
+        if (!imageUrl) continue;
+        
+        // Convert link if needed
+        const { convertLink } = await import('../utils/linkConvert.js');
+        const convertedUrl = convertLink(imageUrl);
+        
         try {
-          const response = await fetch(row.clientScreenshotUrl);
+          const response = await fetch(convertedUrl);
           if (response.ok) {
             const imageBuffer = Buffer.from(await response.arrayBuffer());
-            const cid = `client_screenshot_${index}@email`;
+            const cid = `${imageInfo.imageId}_${index}@email`;
             
             attachments.push({
-              filename: 'image.png',
+              filename: `${imageInfo.variableName.replace(/\s+/g, '_')}.png`,
               content: imageBuffer,
               cid: cid,
               contentDisposition: 'inline'
             });
             
-            // Reference image in HTML using CID
-            const imgTag = `<div style="margin: 20px 0;"><img src="cid:${cid}" alt="Client Screenshot" style="max-width: 600px; width: 100%; height: auto; display: block; border: 1px solid #ddd; border-radius: 4px;"></div>`;
-            
-            if (htmlBody.includes(row.clientScreenshotUrl)) {
-              htmlBody = htmlBody.replace(row.clientScreenshotUrl, imgTag);
-            } else {
-              htmlBody += imgTag;
-            }
+            // Replace placeholder with img tag
+            const imgTag = `<div style="margin: 20px 0;"><img src="cid:${cid}" alt="${imageInfo.variableName}" style="max-width: 600px; width: 100%; height: auto; display: block; border: 1px solid #ddd; border-radius: 4px;"></div>`;
+            htmlBody = htmlBody.replace(`__IMAGE_PLACEHOLDER_${imageInfo.imageId}__`, imgTag);
+          } else {
+            console.error(`Failed to fetch image for ${imageInfo.variableName}: ${response.status}`);
+            // Remove placeholder if image fetch failed
+            htmlBody = htmlBody.replace(`__IMAGE_PLACEHOLDER_${imageInfo.imageId}__`, `[Image not available: ${imageInfo.variableName}]`);
           }
         } catch (error) {
-          console.error(`Failed to fetch client screenshot for row ${index + 1}:`, error.message);
-        }
-      }
-
-      // Fetch and attach competitor screenshot if present
-      if (row.competitorScreenshotUrl) {
-        try {
-          const response = await fetch(row.competitorScreenshotUrl);
-          if (response.ok) {
-            const imageBuffer = Buffer.from(await response.arrayBuffer());
-            const cid = `competitor_screenshot_${index}@email`;
-            
-            attachments.push({
-              filename: 'competitor-screenshot.png',
-              content: imageBuffer,
-              cid: cid,
-              contentDisposition: 'inline'
-            });
-            
-            // Reference image in HTML using CID
-            const imgTag = `<div style="margin: 20px 0;"><img src="cid:${cid}" alt="Competitor Screenshot" style="max-width: 600px; width: 100%; height: auto; display: block; border: 1px solid #ddd; border-radius: 4px;"></div>`;
-            
-            if (htmlBody.includes(row.competitorScreenshotUrl)) {
-              htmlBody = htmlBody.replace(row.competitorScreenshotUrl, imgTag);
-            } else {
-              htmlBody += imgTag;
-            }
-          }
-        } catch (error) {
-          console.error(`Failed to fetch competitor screenshot for row ${index + 1}:`, error.message);
+          console.error(`Error fetching image for ${imageInfo.variableName}:`, error.message);
+          // Remove placeholder if error occurred
+          htmlBody = htmlBody.replace(`__IMAGE_PLACEHOLDER_${imageInfo.imageId}__`, `[Image error: ${imageInfo.variableName}]`);
         }
       }
       
@@ -334,7 +367,7 @@ export const scheduleEmails = async (req, res) => {
  */
 export const sendEmailsNow = async (req, res) => {
   try {
-    const { fileId, templateId, intervalSeconds } = req.body;
+    const { fileId, templateId, intervalSeconds, startRow, endRow } = req.body;
     const userId = req.user.id;
 
     if (!fileId || !templateId || !intervalSeconds) {
@@ -348,8 +381,8 @@ export const sendEmailsNow = async (req, res) => {
     // Import scheduler service
     const { createScheduledJob } = await import('../services/emailScheduler.js');
 
-    // Create and start the scheduled job immediately
-    const scheduledEmail = await createScheduledJob(userId, fileId, templateId, intervalSeconds, true);
+    // Create and start the scheduled job immediately, passing row range
+    const scheduledEmail = await createScheduledJob(userId, fileId, templateId, intervalSeconds, true, startRow, endRow);
 
     return res.status(200).json({
       message: 'Email sending started successfully',
@@ -609,5 +642,93 @@ export const deleteSentEmails = async (req, res) => {
   } catch (error) {
     console.error('delete sent emails error:', error);
     return res.status(500).json({ error: error.message || 'Failed to delete emails' });
+  }
+};
+
+/**
+ * Validate template variables against Excel file data
+ * Check which template variables have corresponding Excel columns
+ */
+export const validateTemplateMapping = async (req, res) => {
+  try {
+    const { fileId, templateId } = req.query;
+
+    if (!fileId || !templateId) {
+      return res.status(400).json({ error: 'fileId and templateId are required' });
+    }
+
+    // Fetch template
+    const template = await EmailTemplate.findByPk(parseInt(templateId));
+    if (!template) {
+      return res.status(404).json({ error: 'Template not found' });
+    }
+
+    // Fetch a sample row to get available Excel columns
+    const sampleRow = await UploadedRow.findOne({
+      where: { fileId },
+      order: [['id', 'ASC']],
+    });
+
+    if (!sampleRow) {
+      return res.status(404).json({ error: 'No rows found for this fileId' });
+    }
+
+    // Get all template variables from database
+    const { default: TemplateVariable } = await import('../models/templateVariable.js');
+    const allVariables = await TemplateVariable.findAll({
+      order: [['variableName', 'ASC']],
+    });
+
+    // Extract all {{variable}} placeholders from template
+    const templateText = `${template.subject} ${template.body}`;
+    const variablePattern = /\{\{([^}]+)\}\}/g;
+    const usedVariableNames = new Set();
+    let match;
+    
+    while ((match = variablePattern.exec(templateText)) !== null) {
+      usedVariableNames.add(match[1].trim());
+    }
+
+    // Map variable names to their database entries
+    const usedVariables = allVariables.filter(v => 
+      usedVariableNames.has(v.variableName)
+    );
+
+    // Get available Excel data keys from sample row
+    const rowData = sampleRow.get({ plain: true });
+    const availableKeys = Object.keys(rowData).filter(key => 
+      !['id', 'fileId', 'created_at', 'createdAt', 'updated_at', 'updatedAt'].includes(key)
+    );
+
+    // Check each used variable to see if data exists
+    const variableStatus = usedVariables.map(variable => {
+      const hasData = rowData[variable.variableKey] !== null && 
+                      rowData[variable.variableKey] !== undefined &&
+                      rowData[variable.variableKey] !== '';
+      
+      return {
+        name: variable.variableName,
+        key: variable.variableKey,
+        type: variable.variableType,
+        hasData,
+        sampleValue: hasData ? String(rowData[variable.variableKey]).substring(0, 50) : null,
+      };
+    });
+
+    const matchedCount = variableStatus.filter(v => v.hasData).length;
+    const missingCount = variableStatus.filter(v => !v.hasData).length;
+
+    return res.status(200).json({
+      variables: variableStatus,
+      summary: {
+        total: variableStatus.length,
+        matched: matchedCount,
+        missing: missingCount,
+      },
+      availableColumns: availableKeys,
+    });
+  } catch (error) {
+    console.error('validate template mapping error:', error);
+    return res.status(500).json({ error: 'Failed to validate template mapping' });
   }
 };

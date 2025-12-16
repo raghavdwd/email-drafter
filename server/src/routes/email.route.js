@@ -1,7 +1,9 @@
 import express from 'express';
 import { 
   uploadExcel, 
-  getTemplates, 
+  getTemplates,
+  getAllTemplatesForUser,
+  getVariablesForUser,
   generateDrafts,
   scheduleEmails,
   sendEmailsNow,
@@ -11,7 +13,8 @@ import {
   cancelScheduledJob,
   getSentEmails,
   deleteSentEmails,
-  getUploadedFiles
+  getUploadedFiles,
+  validateTemplateMapping
 } from '../controllers/email.controller.js';
 import { uploadMiddleware } from '../middleware/uploadMiddleware.js';
 import { verifyToken } from '../middleware/auth.middleware.js';
@@ -53,5 +56,14 @@ router.delete('/email/history', verifyToken, deleteSentEmails);
 
 // Get uploaded files history (requires auth)
 router.get('/email/uploads', verifyToken, getUploadedFiles);
+
+// Validate template variable mapping with Excel data
+router.get('/template/validate', verifyToken, validateTemplateMapping);
+
+// Get all templates with full details for users (Variables Guide)
+router.get('/templates/all', verifyToken, getAllTemplatesForUser);
+
+// Get all variables for users (Variables Guide)
+router.get('/variables', verifyToken, getVariablesForUser);
 
 export default router;

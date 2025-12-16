@@ -1,54 +1,133 @@
+import TemplateVariable from '../models/templateVariable.js';
+
 /**
- * Replaces placeholders in template string with actual values
- * @param {string} template - Template string with placeholders like {{First Name}}
- * @param {object} data - Object with actual values
- * @returns {string} - String with placeholders replaced
+ * Loads variables from database and builds placeholder map
+ * @returns {Promise<Object>} - Map of placeholder names to variable keys
  */
-export const replacePlaceholders = (template, data) => {
-  if (!template) return '';
+export const loadVariablesFromDB = async () => {
+  try {
+    const variables = await TemplateVariable.findAll();
+    const placeholderMap = {};
+    
+    variables.forEach(variable => {
+      const placeholder = `{{${variable.variableName}}}`;
+      placeholderMap[placeholder] = variable.variableKey;
+    });
+    
+    return placeholderMap;
+  } catch (error) {
+    console.error('Error loading variables from database:', error);
+    return {};
+  }
+};
 
-  let result = template;
+/**
+ * Replace placeholders like {{Variable Name}} in a string with actual values from row data
+ * Now uses variable display names directly - Excel columns should match {{Variable Name}} exactly
+ * For image variables, marks them for inline embedding instead of displaying URLs
+ * @param {string} text - Template text with {{placeholders}}
+ * @param {Object} row - Row data object with column names matching variable display names
+ * @returns {Promise<{text: string, images: Array}>} - Processed text and list of images to embed
+ */
+export const replacePlaceholders = async (text, row) => {
+  if (!text || typeof text !== 'string') return { text, images: [] };
 
-  // mapping of placeholder names to data keys
-  const placeholderMap = {
-    '{{First Name}}': data.firstName || '',
-    '{{Client Business Name}}': data.clientBusinessName || '',
-    '{{Client business name}}': data.clientBusinessName || '',
-    '{{Company Name}}': data.clientBusinessName || '',
-    '{{Website}}': data.website || '',
-    '{{Client Website}}': data.website || '',
-    '{{Client Traffic}}': data.clientTraffic?.toString() || '',
-    '{{Client traffic}}': data.clientTraffic?.toString() || '',
-    '{{Competitor Name}}': data.competitorName || '',
-    '{{Competitor Business Name 1}}': data.competitorName || '',
-    '{{Competitor business name}}': data.competitorName || '',
-    '{{Competitor Traffic}}': data.competitorTraffic?.toString() || '',
-    '{{Competitor traffic}}': data.competitorTraffic?.toString() || '',
-    '{{Competitor Traffic 1}}': data.competitorTraffic?.toString() || '',
-    '{{Competitor Website}}': data.competitorWebsite || '',
-    '{{Competitor Website 1}}': data.competitorWebsite || '',
-    '{{Competitor Website Link}}': data.competitorWebsite || '',
-    '{{Competitor Name 2}}': data.competitorName2 || '',
-    '{{Competitor Business Name 2}}': data.competitorName2 || '',
-    '{{Competitor Traffic 2}}': data.competitorTraffic2?.toString() || '',
-    '{{Competitor Website 2}}': data.competitorWebsite2 || '',
-    '{{Calendar Link}}': data.calendarLink || '',
-    '{{Client Screenshot URL}}': data.clientScreenshotUrl || '',
-    '{{Client Screenshot}}': data.clientScreenshotUrl || '',
-    '{{Client SS}}': data.clientScreenshotUrl || '',
-    '{{Competitor Screenshot URL}}': data.competitorScreenshotUrl || '',
-    '{{Competitor Screenshot}}': data.competitorScreenshotUrl || '',
-    '{{Sending Account Name}}': data.sendingAccountName || '',
-    '{{SendingAccountName}}': data.sendingAccountName || '',
-    '{{Email}}': data.sendingAccountName || '',
-  };
-
-  // replace all placeholders
-  Object.entries(placeholderMap).forEach(([placeholder, value]) => {
-    result = result.split(placeholder).join(value);
+  // Load variables from database to check types
+  const variables = await TemplateVariable.findAll();
+  
+  // Create maps for variable types
+  const variableTypeMap = {};
+  variables.forEach(v => {
+    variableTypeMap[v.variableName] = v.variableType;
   });
 
-  return result;
+  // Legacy fallback support for old camelCase keys (backward compatibility)
+  const legacyMap = {
+    '{{First Name}}': 'firstName',
+    '{{Client Business Name}}': 'clientBusinessName',
+    '{{Company Name}}': 'clientBusinessName',
+    '{{Website}}': 'website',
+    '{{Client Website}}': 'website',
+    '{{Client Traffic}}': 'clientTraffic',
+    '{{Competitor Name}}': 'competitorName',
+    '{{Competitor Business Name 1}}': 'competitorName',
+    '{{Competitor Traffic}}': 'competitorTraffic',
+    '{{Competitor Traffic 1}}': 'competitorTraffic',
+    '{{Competitor Website}}': 'competitorWebsite',
+    '{{Competitor Website 1}}': 'competitorWebsite',
+    '{{Competitor Name 2}}': 'competitorName2',
+    '{{Competitor Business Name 2}}': 'competitorName2',
+    '{{Competitor Traffic 2}}': 'competitorTraffic2',
+    '{{Competitor Website 2}}': 'competitorWebsite2',
+    '{{Calendar Link}}': 'calendarLink',
+    '{{Client Screenshot URL}}': 'clientScreenshotUrl',
+    '{{Client Screenshot}}': 'clientScreenshotUrl',
+    '{{Client SS}}': 'clientScreenshotUrl',
+    '{{Competitor Screenshot URL}}': 'competitorScreenshotUrl',
+    '{{Competitor Screenshot}}': 'competitorScreenshotUrl',
+    '{{Sending Account Name}}': 'sendingAccountName',
+    '{{Email}}': 'sendingAccountName',
+  };
+
+  const imagesToEmbed = [];
+  let processedText = text;
+
+  // Replace each {{placeholder}} with its value
+  processedText = processedText.replace(/\{\{([^}]+)\}\}/g, (match, variableName) => {
+    const trimmedName = variableName.trim();
+    
+    // Parse rawData if available (contains all original Excel columns)
+    let excelData = {};
+    if (row.rawData) {
+      try {
+        excelData = JSON.parse(row.rawData);
+      } catch (e) {
+        console.error('Failed to parse rawData:', e);
+      }
+    }
+    
+    let value = null;
+    let foundKey = null;
+    
+    // Try to find value: Excel rawData > row direct > legacy key
+    if (excelData[trimmedName] !== undefined && excelData[trimmedName] !== null && excelData[trimmedName] !== '') {
+      value = excelData[trimmedName];
+      foundKey = trimmedName;
+    } else if (row[trimmedName] !== undefined && row[trimmedName] !== null && row[trimmedName] !== '') {
+      value = row[trimmedName];
+      foundKey = trimmedName;
+    } else {
+      const legacyKey = legacyMap[match];
+      if (legacyKey && row[legacyKey] !== undefined && row[legacyKey] !== null && row[legacyKey] !== '') {
+        value = row[legacyKey];
+        foundKey = legacyKey;
+      }
+    }
+    
+    if (value === null) {
+      return match; // No value found, return placeholder as-is
+    }
+    
+    // Check if this is an image variable
+    const variableType = variableTypeMap[trimmedName];
+    if (variableType === 'image' && value) {
+      // This is an image - mark it for inline embedding
+      const imageId = `image_${imagesToEmbed.length}`;
+      imagesToEmbed.push({
+        url: value,
+        variableName: trimmedName,
+        placeholder: match,
+        imageId
+      });
+      // Return a placeholder that will be replaced with <img> tag later
+      return `__IMAGE_PLACEHOLDER_${imageId}__`;
+    }
+    
+    // For non-image variables, return the value
+    return value;
+  });
+
+  return { text: processedText, images: imagesToEmbed };
 };
 
 /**

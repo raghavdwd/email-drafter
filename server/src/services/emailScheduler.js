@@ -19,17 +19,32 @@ import { convertLink } from '../utils/linkConvert.js';
  * @param {number} templateId - Template ID
  * @param {number} intervalSeconds - Interval between emails in seconds
  * @param {boolean} startImmediately - Whether to start sending immediately
+ * @param {number} startRow - Start row number (optional, 1-indexed)
+ * @param {number} endRow - End row number (optional, 1-indexed)
  * @returns {Promise<Object>} - Created scheduled email job
  */
-export const createScheduledJob = async (userId, fileId, templateId, intervalSeconds, startImmediately = true) => {
-  // Fetch rows for this file
-  const rows = await UploadedRow.findAll({
+export const createScheduledJob = async (userId, fileId, templateId, intervalSeconds, startImmediately = true, startRow, endRow) => {
+  // Fetch all rows for this file
+  const allRows = await UploadedRow.findAll({
     where: { fileId },
     order: [['id', 'ASC']],
   });
 
-  if (rows.length === 0) {
+  if (allRows.length === 0) {
     throw new Error('No rows found for this fileId');
+  }
+
+  // Apply row range filtering if provided
+  let rows = allRows;
+  
+  if (startRow !== undefined || endRow !== undefined) {
+    const start = Math.max(1, parseInt(startRow) || 1) - 1; // Convert to 0-indexed
+    const end = Math.min(allRows.length, parseInt(endRow) || allRows.length); // Inclusive
+    rows = allRows.slice(start, end);
+    
+    if (rows.length === 0) {
+      throw new Error('Invalid row range specified');
+    }
   }
 
   // Create scheduled email record
@@ -97,76 +112,54 @@ export const startScheduledJob = async (scheduledEmailId) => {
 
   // Prepare emails data
   const emailsData = await Promise.all(rows.map(async (rowModel, index) => {
+    // Convert sequelize model to plain object  
     const row = rowModel.get({ plain: true });
     
-    // Apply link conversion to screenshot URLs if present
-    if (row.clientScreenshotUrl) {
-      row.clientScreenshotUrl = convertLink(row.clientScreenshotUrl);
-    }
-    if (row.competitorScreenshotUrl) {
-      row.competitorScreenshotUrl = convertLink(row.competitorScreenshotUrl);
-    }
-
-    const subject = replacePlaceholders(template.subject, row);
-    const textBody = replacePlaceholders(template.body, row);
+    // Replace placeholders - returns text and list of images to embed
+    const subjectResult = await replacePlaceholders(template.subject, row);
+    const bodyResult = await replacePlaceholders(template.body, row);
+    
+    const subject = typeof subjectResult === 'string' ? subjectResult : subjectResult.text;
+    const textBody = typeof bodyResult === 'string' ? bodyResult : bodyResult.text;
+    const imagesToEmbed = bodyResult.images || [];
     
     // Prepare attachments array for inline images
     const attachments = [];
     let htmlBody = textBody.replace(/\n/g, '<br>');
     
-    // Fetch and attach client screenshot if present
-    if (row.clientScreenshotUrl) {
+    // Process image variables
+    for (let imgIndex = 0; imgIndex < imagesToEmbed.length; imgIndex++) {
+      const imageInfo = imagesToEmbed[imgIndex];
+      const imageUrl = imageInfo.url;
+      
+      if (!imageUrl) continue;
+      
+      // Convert link if needed
+      const convertedUrl = convertLink(imageUrl);
+      
       try {
-        const response = await fetch(row.clientScreenshotUrl);
+        const response = await fetch(convertedUrl);
         if (response.ok) {
           const imageBuffer = Buffer.from(await response.arrayBuffer());
-          const cid = `client_screenshot_${index}@email`;
+          const cid = `${imageInfo.imageId}_email`;
           
           attachments.push({
-            filename: 'image.png',
+            filename: `${imageInfo.variableName.replace(/\s+/g, '_')}.png`,
             content: imageBuffer,
             cid: cid,
             contentDisposition: 'inline'
           });
           
-          const imgTag = `<div style="margin: 20px 0;"><img src="cid:${cid}" alt="Client Screenshot" style="max-width: 600px; width: 100%; height: auto; display: block; border: 1px solid #ddd; border-radius: 4px;"></div>`;
-          
-          if (htmlBody.includes(row.clientScreenshotUrl)) {
-            htmlBody = htmlBody.replace(row.clientScreenshotUrl, imgTag);
-          } else {
-            htmlBody += imgTag;
-          }
+          // Replace placeholder with img tag
+          const imgTag = `<div style="margin: 20px 0;"><img src="cid:${cid}" alt="${imageInfo.variableName}" style="max-width: 600px; width: 100%; height: auto; display: block; border: 1px solid #ddd; border-radius: 4px;"></div>`;
+          htmlBody = htmlBody.replace(`__IMAGE_PLACEHOLDER_${imageInfo.imageId}__`, imgTag);
+        } else {
+          console.error(`Failed to fetch image for ${imageInfo.variableName}: ${response.status}`);
+          htmlBody = htmlBody.replace(`__IMAGE_PLACEHOLDER_${imageInfo.imageId}__`, `[Image not available: ${imageInfo.variableName}]`);
         }
       } catch (error) {
-        console.error(`Failed to fetch client screenshot for row ${index + 1}:`, error.message);
-      }
-    }
-
-    // Fetch and attach competitor screenshot if present
-    if (row.competitorScreenshotUrl) {
-      try {
-        const response = await fetch(row.competitorScreenshotUrl);
-        if (response.ok) {
-          const imageBuffer = Buffer.from(await response.arrayBuffer());
-          const cid = `competitor_screenshot_${index}@email`;
-          
-          attachments.push({
-            filename: 'competitor-screenshot.png',
-            content: imageBuffer,
-            cid: cid,
-            contentDisposition: 'inline'
-          });
-          
-          const imgTag = `<div style="margin: 20px 0;"><img src="cid:${cid}" alt="Competitor Screenshot" style="max-width: 600px; width: 100%; height: auto; display: block; border: 1px solid #ddd; border-radius: 4px;"></div>`;
-          
-          if (htmlBody.includes(row.competitorScreenshotUrl)) {
-            htmlBody = htmlBody.replace(row.competitorScreenshotUrl, imgTag);
-          } else {
-            htmlBody += imgTag;
-          }
-        }
-      } catch (error) {
-        console.error(`Failed to fetch competitor screenshot for row ${index + 1}:`, error.message);
+        console.error(`Error fetching image for ${imageInfo.variableName}:`, error.message);
+        htmlBody = htmlBody.replace(`__IMAGE_PLACEHOLDER_${imageInfo.imageId}__`, `[Image error: ${imageInfo.variableName}]`);
       }
     }
     
@@ -265,14 +258,19 @@ export const pauseJob = async (scheduledEmailId) => {
   }
 
   if (scheduledEmail.status !== 'in_progress') {
-    throw new Error('Can only pause jobs that are in progress');
+    throw new Error(`Cannot pause job with status: ${scheduledEmail.status}. Only in-progress jobs can be paused.`);
   }
 
   // Pause the job in gmailService
   const paused = pauseScheduledSend(scheduledEmailId);
   
   if (!paused) {
-    throw new Error('Job is not currently active');
+    // Job finished just now or was never started
+    const freshStatus = await ScheduledEmail.findByPk(scheduledEmailId);
+    if (freshStatus.status === 'completed') {
+      throw new Error('Job has already completed and cannot be paused');
+    }
+    throw new Error('Job is not currently active. It may have finished or not started yet.');
   }
 
   // Update status

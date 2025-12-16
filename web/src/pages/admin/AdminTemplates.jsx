@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { createTemplate, getAllTemplatesAdmin, deleteTemplate, updateTemplate } from '../../utils/emailApi';
+import { createTemplate, getAllTemplatesAdmin, deleteTemplate, updateTemplate, getAllVariablesAdmin } from '../../utils/emailApi';
 
 const AdminTemplates = () => {
     const [templates, setTemplates] = useState([]);
+    const [variables, setVariables] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
@@ -18,6 +19,7 @@ const AdminTemplates = () => {
 
     useEffect(() => {
         fetchTemplates();
+        fetchVariables();
     }, []);
 
     const fetchTemplates = async () => {
@@ -29,6 +31,15 @@ const AdminTemplates = () => {
             console.error('fetch templates error:', err);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const fetchVariables = async () => {
+        try {
+            const data = await getAllVariablesAdmin();
+            setVariables(data.variables || []);
+        } catch (err) {
+            console.error('fetch variables error:', err);
         }
     };
 
@@ -141,6 +152,35 @@ const AdminTemplates = () => {
                                 </label>
                                 <textarea name="body" value={templateForm.body} onChange={handleTemplateFormChange} placeholder="Hi {{Name}}..." className="textarea textarea-bordered h-48 leading-relaxed"></textarea>
                             </div>
+
+                            {/* Available Variables Reference */}
+                            {variables.length > 0 && (
+                                <div className="mt-4 p-3 bg-base-200/30 rounded-lg border border-base-content/10">
+                                    <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                        Available Variables
+                                    </h4>
+                                    <div className="flex flex-wrap gap-1 max-h-32 overflow-y-auto">
+                                        {variables.map((variable) => (
+                                            <span 
+                                                key={variable.id} 
+                                                className="badge badge-sm cursor-pointer hover:badge-primary transition-colors" 
+                                                title={variable.description || variable.variableKey}
+                                                onClick={() => {
+                                                    const varText = `{{${variable.variableName}}}`;
+                                                    navigator.clipboard.writeText(varText);
+                                                }}
+                                            >
+                                                {variable.variableType === 'image' && '🖼️'}
+                                                {variable.variableType === 'link' && '🔗'}
+                                                {variable.variableType === 'text' && '📝'}
+                                                {variable.variableName}
+                                            </span>
+                                        ))}
+                                    </div>
+                                    <p className="text-xs text-base-content/50 mt-2">Click to copy</p>
+                                </div>
+                            )}
 
                             <div className="flex gap-2">
                                 <button type="submit" className={`btn w-full ${editingId ? 'btn-warning' : 'btn-primary'}`}>

@@ -40,6 +40,12 @@ const Navbar = () => {
           >
             Profile
           </button>
+          <button 
+            onClick={() => navigate('/variables-guide')}
+            className={`btn btn-sm ${isActive('/variables-guide') ? 'btn-neutral' : 'btn-ghost text-base-content/70'}`}
+          >
+            📋 Variables
+          </button>
         </div>
       </div>
 
@@ -62,6 +68,7 @@ const Navbar = () => {
             {/* Mobile links appear in dropdown */}
             <li className="md:hidden"><a onClick={() => navigate('/dashboard')}>Dashboard</a></li>
             <li className="md:hidden"><a onClick={() => navigate('/profile')}>Profile</a></li>
+            <li className="md:hidden"><a onClick={() => navigate('/variables-guide')}>📋 Variables Guide</a></li>
             
             <li><a onClick={handleLogout} className="text-error font-medium">Logout</a></li>
           </ul>

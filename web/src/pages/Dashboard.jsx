@@ -8,7 +8,8 @@ import {
   checkGmailConnection, 
   connectGmail, 
   disconnectGmail,
-  sendEmailsNow
+  sendEmailsNow,
+  validateTemplateMapping
 } from '../utils/emailApi';
 import SendOptionsModal from '../components/SendOptionsModal';
 import ScheduleEmailModal from '../components/ScheduleEmailModal';
@@ -25,8 +26,11 @@ const Dashboard = () => {
   const [file, setFile] = useState(null);
   const [fileId, setFileId] = useState('');
   const [rowCount, setRowCount] = useState(0);
+  const [startRow, setStartRow] = useState(1);
+  const [endRow, setEndRow] = useState(0);
   const [templates, setTemplates] = useState([]);
   const [selectedTemplate, setSelectedTemplate] = useState('');
+  const [validationResult, setValidationResult] = useState(null);
   const [drafts, setDrafts] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -90,6 +94,8 @@ const Dashboard = () => {
       // reset previous upload data
       setFileId('');
       setRowCount(0);
+      setStartRow(1);
+      setEndRow(0);
       setDrafts([]);
     }
   };
@@ -106,7 +112,8 @@ const Dashboard = () => {
       const data = await uploadExcel(file);
       setFileId(data.fileId);
       setRowCount(data.count);
-      setSuccess(`Successfully uploaded ${data.count} rows`);
+      setEndRow(data.count); // Set default end to total rows
+      setSuccess(`Successfully uploaded ${data. count} rows`);
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to upload Excel file');
@@ -131,10 +138,20 @@ const Dashboard = () => {
       return;
     }
 
+    // Validate row range
+    if (startRow < 1 || startRow > rowCount) {
+      setError(`Start row must be between 1 and ${rowCount}`);
+      return;
+    }
+    if (endRow < startRow || endRow > rowCount) {
+      setError(`End row must be between ${startRow} and ${rowCount}`);
+      return;
+    }
+
     try {
       setLoading(true);
       setError('');
-      const data = await generateDrafts(fileId, parseInt(selectedTemplate));
+      const data = await generateDrafts(fileId, parseInt(selectedTemplate), startRow, endRow);
       setDrafts(data.drafts || []);
       setSuccess(data.message || `Created ${data.successCount} drafts successfully!`);
       setTimeout(() => setSuccess(''), 5000);
@@ -205,12 +222,22 @@ const Dashboard = () => {
   };
 
   const handleSendEmails = async (intervalSeconds) => {
+    // Validate row range
+    if (startRow < 1 || startRow > rowCount) {
+      setError(`Start row must be between 1 and ${rowCount}`);
+      return;
+    }
+    if (endRow < startRow || endRow > rowCount) {
+      setError(`End row must be between ${startRow} and ${rowCount}`);
+      return;
+    }
+
     try {
       setLoading(true);
       setError('');
       setShowScheduleModal(false);
       
-      const data = await sendEmailsNow(fileId, parseInt(selectedTemplate), intervalSeconds);
+      const data = await sendEmailsNow(fileId, parseInt(selectedTemplate), intervalSeconds, startRow, endRow);
       setSuccess(data.message || 'Email sending started successfully!');
       setTimeout(() => setSuccess(''), 5000);
       
@@ -222,6 +249,27 @@ const Dashboard = () => {
       setLoading(false);
     }
   };
+
+  // Validate template mapping when both fileId and template are selected
+  const fetchValidation = async () => {
+    if (!fileId || !selectedTemplate) {
+      setValidationResult(null);
+      return;
+    }
+
+    try {
+      const data = await validateTemplateMapping(fileId, parseInt(selectedTemplate));
+      setValidationResult(data);
+    } catch (err) {
+      console.error('validation error:', err);
+      setValidationResult(null);
+    }
+  };
+
+  // Trigger validation when template or file changes
+  useEffect(() => {
+    fetchValidation();
+  }, [fileId, selectedTemplate]);
 
   return (
     <div className="min-h-screen bg-base-100">
@@ -356,6 +404,48 @@ const Dashboard = () => {
                     </div>
                   </div>
 
+                  {/* Row Range Selection */}
+                  {fileId && (
+                    <div className="bg-primary/5 border border-primary/20 rounded-lg p-4 mb-6">
+                      <h3 className="font-bold text-sm mb-3 flex items-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                        Row Range Selection
+                      </h3>
+                      <p className="text-xs text-base-content/60 mb-3">Process a specific range of rows (Total: {rowCount} rows)</p>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="form-control">
+                          <label className="label py-1">
+                            <span className="label-text text-xs font-medium">Start Row</span>
+                          </label>
+                          <input
+                            type="number"
+                            min="1"
+                            max={rowCount}
+                            value={startRow}
+                            onChange={(e) => setStartRow(Math.max(1, Math.min(rowCount, parseInt(e.target.value) || 1)))}
+                            className="input input-bordered input-sm w-full"
+                          />
+                        </div>
+                        <div className="form-control">
+                          <label className="label py-1">
+                            <span className="label-text text-xs font-medium">End Row</span>
+                          </label>
+                          <input
+                            type="number"
+                            min={startRow}
+                            max={rowCount}
+                            value={endRow}
+                            onChange={(e) => setEndRow(Math.max(startRow, Math.min(rowCount, parseInt(e.target.value) || rowCount)))}
+                            className="input input-bordered input-sm w-full"
+                          />
+                        </div>
+                      </div>
+                      <div className="mt-2 text-xs text-base-content/70">
+                        Will process <span className="font-bold text-primary">{Math.max(0, endRow - startRow + 1)}</span> row(s)
+                      </div>
+                    </div>
+                  )}
+
                   {/* Template Selection */}
                   <div className="form-control w-full">
                     <label className="label">
@@ -375,6 +465,64 @@ const Dashboard = () => {
                       ))}
                     </select>
                   </div>
+
+                  {/* Template-Excel Field Validation */}
+                  {validationResult && (
+                    <div className="mt-6 p-4 bg-base-200/50 rounded-lg border border-base-content/10">
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="font-bold text-sm flex items-center gap-2">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                          Field Validation
+                        </h3>
+                        <div className="flex gap-2 text-xs">
+                          <span className="badge badge-success badge-sm">{validationResult.summary.matched} matched</span>
+                          {validationResult.summary.missing > 0 && (
+                            <span className="badge badge-warning badge-sm">{validationResult.summary.missing} missing</span>
+                          )}
+                        </div>
+                      </div>
+                      
+                      {validationResult.summary.missing > 0 && (
+                        <div className="alert alert-warning text-xs py-2 mb-3">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="stroke-current shrink-0 h-4 w-4" fill="none" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                          <span>Some template variables are missing data in your Excel file</span>
+                        </div>
+                      )}
+
+                      <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                        {validationResult.variables.map((variable, idx) => (
+                          <div 
+                            key={idx} 
+                            className={`flex items-start justify-between p-2 rounded text-xs ${
+                              variable.hasData ? 'bg-success/10' : 'bg-warning/10'
+                            }`}
+                          >
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
+                                {variable.hasData ? (
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /></svg>
+                                ) : (
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-warning" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                )}
+                                <span className="font-semibold">{variable.name}</span>
+                                <span className="badge badge-xs">{variable.type}</span>
+                              </div>
+                              {variable.hasData && variable.sampleValue && (
+                                <div className="text-base-content/50 ml-6 truncate" title={variable.sampleValue}>
+                                  Sample: {variable.sampleValue}
+                                </div>
+                              )}
+                              {!variable.hasData && (
+                                <div className="text-warning ml-6 text-xs">
+                                  Excel column "{variable.key}" has no data
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
