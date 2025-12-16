@@ -1,7 +1,20 @@
 import React, { useContext, useState, useEffect } from 'react';
 import { AuthContext } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { uploadExcel, getTemplates, generateDrafts, checkGmailConnection, connectGmail, disconnectGmail } from '../utils/emailApi';
+import { 
+  uploadExcel, 
+  getTemplates, 
+  generateDrafts, 
+  checkGmailConnection, 
+  connectGmail, 
+  disconnectGmail,
+  sendEmailsNow
+} from '../utils/emailApi';
+import SendOptionsModal from '../components/SendOptionsModal';
+import ScheduleEmailModal from '../components/ScheduleEmailModal';
+import ScheduledJobsPanel from '../components/ScheduledJobsPanel';
+import SentEmailsHistory from '../components/SentEmailsHistory';
+import Navbar from '../components/Navbar';
 
 // user dashboard for approved users
 const Dashboard = () => {
@@ -20,6 +33,9 @@ const Dashboard = () => {
   const [success, setSuccess] = useState('');
   const [gmailConnected, setGmailConnected] = useState(false);
   const [checkingConnection, setCheckingConnection] = useState(true);
+  const [showSendOptionsModal, setShowSendOptionsModal] = useState(false);
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [jobsRefreshTrigger, setJobsRefreshTrigger] = useState(0);
 
   // Extract token from URL if present (from OAuth redirect)
   useEffect(() => {
@@ -159,232 +175,251 @@ const Dashboard = () => {
     }
   };
 
+  const handleChooseAction = () => {
+    if (!fileId) {
+      setError('Please upload an Excel file first');
+      return;
+    }
+
+    if (!selectedTemplate) {
+      setError('Please select a template');
+      return;
+    }
+
+    if (!gmailConnected) {
+      setError('Please connect your Gmail account first');
+      return;
+    }
+
+    setShowSendOptionsModal(true);
+  };
+
+  const handleSelectDraft = () => {
+    setShowSendOptionsModal(false);
+    handleGenerateDrafts();
+  };
+
+  const handleSelectSend = () => {
+    setShowSendOptionsModal(false);
+    setShowScheduleModal(true);
+  };
+
+  const handleSendEmails = async (intervalSeconds) => {
+    try {
+      setLoading(true);
+      setError('');
+      setShowScheduleModal(false);
+      
+      const data = await sendEmailsNow(fileId, parseInt(selectedTemplate), intervalSeconds);
+      setSuccess(data.message || 'Email sending started successfully!');
+      setTimeout(() => setSuccess(''), 5000);
+      
+      // Trigger jobs panel refresh
+      setJobsRefreshTrigger(prev => prev + 1);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to start sending emails');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-base-100">
       {/* navbar */}
-      <div className="navbar bg-base-200">
-        <div className="flex-1">
-          <a className="btn btn-ghost text-xl text-base-content">
-            email drafter
-          </a>
-        </div>
-        <div className="flex-none gap-2">
-          <div className="dropdown dropdown-end">
-            <div
-              tabIndex={0}
-              role="button"
-              className="btn btn-ghost btn-circle avatar"
-            >
-              <div className="w-10 rounded-full">
-                <img alt="user avatar" src={user?.photo} />
-              </div>
-            </div>
-            <ul
-              tabIndex={0}
-              className="menu menu-sm dropdown-content bg-base-200 rounded-box z-[1] mt-3 w-52 p-2 shadow"
-            >
-              <li>
-                <a className="justify-between text-base-content">
-                  {user?.name}
-                  <span className="badge badge-success">approved</span>
-                </a>
-              </li>
-              <li>
-                <a onClick={handleLogout} className="text-base-content">
-                  logout
-                </a>
-              </li>
-            </ul>
-          </div>
-        </div>
-      </div>
+      <Navbar />
 
       {/* main content */}
-      <div className="container mx-auto p-8">
-        <h1 className="text-3xl font-bold text-base-content mb-6">
-          Email Drafting Tool
-        </h1>
+      <div className="container mx-auto p-4 max-w-5xl">
+        <div className="text-center mb-10">
+          <h1 className="text-4xl font-extrabold text-base-content mb-2 tracking-tight">
+            Email Drafter
+          </h1>
+          <p className="text-lg text-base-content/70">
+            Streamline your outreach with automated drafts and scheduled sending
+          </p>
+        </div>
 
         {/* error alert */}
         {error && (
-          <div className="alert alert-error mb-4">
+          <div className="alert alert-error mb-6 shadow-lg">
+            <svg xmlns="http://www.w3.org/2000/svg" className="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
             <span>{error}</span>
           </div>
         )}
 
         {/* success alert */}
         {success && (
-          <div className="alert alert-success mb-4">
+          <div className="alert alert-success mb-6 shadow-lg">
+            <svg xmlns="http://www.w3.org/2000/svg" className="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
             <span>{success}</span>
           </div>
         )}
 
         {/* pending approval alert */}
         {user?.status === 'pending' ? (
-          <div className="card w-96 bg-base-200 shadow-xl mx-auto mt-10">
+          <div className="card bg-base-100 shadow-xl border border-warning/20 mx-auto mt-10 max-w-lg">
             <div className="card-body items-center text-center">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="stroke-warning shrink-0 h-12 w-12 mb-4"
-                fill="none"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                />
-              </svg>
-              <h2 className="card-title text-warning">Account Pending</h2>
-              <p>Your account is currently pending approval from an administrator.</p>
-              <p className="text-sm text-base-content/70 mt-2">Please check back later or contact support.</p>
+              <div className="w-16 h-16 bg-warning/10 rounded-full flex items-center justify-center mb-4">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="stroke-warning h-8 w-8"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                  />
+                </svg>
+              </div>
+              <h2 className="card-title text-2xl mb-2">Account Pending</h2>
+              <p className="text-base-content/70">Your account is currently pending approval from an administrator.</p>
             </div>
           </div>
         ) : (
           <>
-            {/* Gmail connection section */}
-            <div className="card bg-base-200 shadow-xl mb-6">
-              <div className="card-body">
-                <h2 className="card-title text-base-content">
-                  Gmail Connection
-                </h2>
-                {checkingConnection ? (
-                  <div className="flex items-center gap-2">
-                    <span className="loading loading-spinner loading-sm"></span>
-                    <span className="text-base-content/70">Checking connection...</span>
+            {/* Status Bar */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+              {/* Gmail Status */}
+              <div className={`card shadow-md border ${gmailConnected ? 'bg-success/5 border-success/20' : 'bg-base-100 border-base-200'} transition-all`}>
+                <div className="card-body p-6 flex flex-row items-center justify-between">
+                  <div>
+                    <h3 className="font-bold text-lg mb-1">Gmail Status</h3>
+                    <p className="text-sm opacity-80">{gmailConnected ? 'Connected & Ready' : 'Not Connected'}</p>
                   </div>
-                ) : gmailConnected ? (
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="badge badge-success">Connected</span>
-                      <span className="text-base-content/70">Your Gmail is connected</span>
+                  <div className="flex flex-col gap-2">
+                    {checkingConnection ? (
+                        <span className="loading loading-spinner loading-md"></span>
+                    ) : gmailConnected ? (
+                      <button onClick={handleDisconnectGmail} className="btn btn-xs btn-outline btn-error">Disconnect</button>
+                    ) : (
+                      <button onClick={handleConnectGmail} className="btn btn-sm btn-primary">Connect</button>
+                    )}
+                  </div>
+                </div>
+              </div>
+              
+              {/* File Status */}
+              <div className={`card shadow-md border ${fileId ? 'bg-primary/5 border-primary/20' : 'bg-base-100 border-base-200'} transition-all`}>
+                <div className="card-body p-6">
+                  <h3 className="font-bold text-lg mb-1">Data Source</h3>
+                  <p className="text-sm opacity-80">{fileId ? `${rowCount} Rows Loaded` : 'No File Uploaded'}</p>
+                </div>
+              </div>
+
+               {/* Template Status */}
+               <div className={`card shadow-md border ${selectedTemplate ? 'bg-secondary/5 border-secondary/20' : 'bg-base-100 border-base-200'} transition-all`}>
+                <div className="card-body p-6">
+                  <h3 className="font-bold text-lg mb-1">Template</h3>
+                  <p className="text-sm opacity-80">{selectedTemplate ? 'Template Selected' : 'No Template Selected'}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Main Workflow Steps */}
+            <ul className="steps w-full mb-10">
+              <li className={`step ${fileId ? 'step-primary' : ''}`}>Upload Data</li>
+              <li className={`step ${selectedTemplate ? 'step-primary' : ''}`}>Select Template</li>
+              <li className={`step ${fileId && selectedTemplate && gmailConnected ? 'step-primary' : ''}`}>Choose Action</li>
+            </ul>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-10">
+              {/* Step 1 & 2 Combined Card */}
+              <div className="card bg-base-100 shadow-xl border border-base-200">
+                <div className="card-body">
+                  <h2 className="card-title text-xl mb-6 flex items-center gap-2">
+                    <span className="badge badge-primary h-8 w-8 rounded-full flex items-center justify-center">1</span>
+                    Setup Campaign
+                  </h2>
+                  
+                  {/* Upload Section */}
+                  <div className="form-control w-full mb-6">
+                    <label className="label">
+                      <span className="label-text font-medium">Upload Excel File (.xlsx)</span>
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="file"
+                        accept=".xlsx, .xls"
+                        onChange={handleFileChange}
+                        className="file-input file-input-bordered w-full"
+                      />
+                      <button
+                        onClick={handleUpload}
+                        disabled={!file || loading}
+                        className="btn btn-primary"
+                      >
+                        {loading ? <span className="loading loading-spinner"></span> : 'Upload'}
+                      </button>
                     </div>
-                    <button
-                      onClick={handleDisconnectGmail}
-                      disabled={loading}
-                      className="btn btn-sm btn-error"
+                  </div>
+
+                  {/* Template Selection */}
+                  <div className="form-control w-full">
+                    <label className="label">
+                      <span className="label-text font-medium">Select Email Template</span>
+                    </label>
+                    <select
+                      value={selectedTemplate}
+                      onChange={(e) => setSelectedTemplate(e.target.value)}
+                      className="select select-bordered w-full font-medium"
+                      disabled={!fileId}
                     >
-                      Disconnect
-                    </button>
+                      <option value="">-- Choose Template --</option>
+                      {templates.map((template) => (
+                        <option key={template.id} value={template.id}>
+                          {template.name}
+                        </option>
+                      ))}
+                    </select>
                   </div>
-                ) : (
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="badge badge-warning">Not Connected</span>
-                      <span className="text-base-content/70">Connect Gmail to create drafts</span>
+                </div>
+              </div>
+
+              {/* Step 3: Action Card */}
+              <div className="card bg-base-100 shadow-xl border border-base-200 flex flex-col">
+                <div className="card-body flex-1 flex flex-col justify-center items-center text-center">
+                  <h2 className="card-title text-xl mb-2 flex items-center gap-2">
+                    <span className="badge badge-primary h-8 w-8 rounded-full flex items-center justify-center">2</span>
+                    Launch
+                  </h2>
+                  <p className="text-base-content/60 mb-8 max-w-sm">
+                    Ready to go? Choose to create safe drafts in Gmail for manual review, or schedule automated sending.
+                  </p>
+                  
+                  {!gmailConnected ? (
+                     <div className="alert alert-warning shadow-sm">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                      <div>
+                        <h3 className="font-bold">Gmail Not Connected</h3>
+                        <div className="text-xs">Connect your account above to proceed.</div>
+                      </div>
                     </div>
+                  ) : (
                     <button
-                      onClick={handleConnectGmail}
-                      disabled={loading}
-                      className="btn btn-sm btn-primary"
+                      onClick={handleChooseAction}
+                      disabled={!fileId || !selectedTemplate || !gmailConnected || loading}
+                      className="btn btn-primary btn-lg w-full max-w-xs shadow-lg hover:scale-105 transition-transform"
                     >
                       {loading ? (
-                        <span className="loading loading-spinner loading-sm"></span>
+                        <span className="loading loading-spinner loading-md"></span>
                       ) : (
-                        'Connect Gmail'
+                        <>
+                          Proceed to Action
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
+                        </>
                       )}
                     </button>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* step 1: upload excel */}
-            <div className="card bg-base-200 shadow-xl mb-6">
-              <div className="card-body">
-                <h2 className="card-title text-base-content">
-                  Step 1: Upload Excel File
-                </h2>
-                <div className="form-control w-full">
-                  <label className="label">
-                    <span className="label-text">Select Excel file (.xlsx, .xls)</span>
-                  </label>
-                  <input
-                    type="file"
-                    accept=".xlsx, .xls"
-                    onChange={handleFileChange}
-                    className="file-input file-input-bordered w-full"
-                  />
+                  )}
                 </div>
-                <div className="card-actions justify-end mt-4">
-                  <button
-                    onClick={handleUpload}
-                    disabled={!file || loading}
-                    className="btn btn-primary"
-                  >
-                    {loading ? (
-                      <span className="loading loading-spinner loading-sm"></span>
-                    ) : (
-                      'Upload'
-                    )}
-                  </button>
-                </div>
-                {rowCount > 0 && (
-                  <div className="alert alert-info mt-4">
-                    <span>{rowCount} rows found</span>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* step 2: select template */}
-            <div className="card bg-base-200 shadow-xl mb-6">
-              <div className="card-body">
-                <h2 className="card-title text-base-content">
-                  Step 2: Select Email Template
-                </h2>
-                <div className="form-control w-full">
-                  <label className="label">
-                    <span className="label-text">Choose a template</span>
-                  </label>
-                  <select
-                    value={selectedTemplate}
-                    onChange={(e) => setSelectedTemplate(e.target.value)}
-                    className="select select-bordered w-full"
-                    disabled={!fileId}
-                  >
-                    <option value="">Select Template</option>
-                    {templates.map((template) => (
-                      <option key={template.id} value={template.id}>
-                        {template.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            </div>
-
-            {/* step 3: generate drafts */}
-            <div className="card bg-base-200 shadow-xl mb-6">
-              <div className="card-body">
-                <h2 className="card-title text-base-content">
-                  Step 3: Generate Gmail Drafts
-                </h2>
-                <div className="card-actions justify-end">
-                  <button
-                    onClick={handleGenerateDrafts}
-                    disabled={!fileId || !selectedTemplate || !gmailConnected || loading}
-                    className="btn btn-success"
-                  >
-                    {loading ? (
-                      <span className="loading loading-spinner loading-sm"></span>
-                    ) : (
-                      'Draft Emails'
-                    )}
-                  </button>
-                </div>
-                {!gmailConnected && (
-                  <div className="alert alert-warning mt-4">
-                    <span>Please connect your Gmail account first</span>
-                  </div>
-                )}
               </div>
             </div>
 
             {/* drafts result */}
             {drafts.length > 0 && (
-              <div className="card bg-base-200 shadow-xl">
+              <div className="card bg-base-200 shadow-xl mb-6">
                 <div className="card-body">
                   <h2 className="card-title text-base-content">
                     Draft Creation Results ({drafts.length})
@@ -424,9 +459,34 @@ const Dashboard = () => {
                 </div>
               </div>
             )}
+
+            {/* Scheduled jobs panel */}
+            <div className="card bg-base-200 shadow-xl mb-6">
+              <div className="card-body">
+                <h2 className="card-title text-base-content">Active Scheduled Jobs</h2>
+                <ScheduledJobsPanel refreshTrigger={jobsRefreshTrigger} />
+              </div>
+            </div>
+
+            {/* Sent emails history */}
+            <SentEmailsHistory refreshTrigger={jobsRefreshTrigger} />
           </>
         )}
       </div>
+
+      {/* Modals */}
+      <SendOptionsModal
+        isOpen={showSendOptionsModal}
+        onClose={() => setShowSendOptionsModal(false)}
+        onSelectDraft={handleSelectDraft}
+        onSelectSend={handleSelectSend}
+      />
+      <ScheduleEmailModal
+        isOpen={showScheduleModal}
+        onClose={() => setShowScheduleModal(false)}
+        onSend={handleSendEmails}
+        rowCount={rowCount}
+      />
     </div>
   );
 };

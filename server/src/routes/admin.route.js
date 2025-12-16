@@ -1,5 +1,5 @@
 import express from "express";
-import { adminLogin, getAllUsers, approveUser, createTemplate, getAllTemplates, deleteTemplate } from "../controllers/admin.controller.js";
+import { adminLogin, getAllUsers, approveUser, createTemplate, getAllTemplates, deleteTemplate, updateTemplate, deleteUser } from "../controllers/admin.controller.js";
 import { verifyToken, verifyAdmin } from "../middleware/auth.middleware.js";
 
 const router = express.Router();
@@ -10,9 +10,11 @@ router.post("/login", adminLogin);
 // user management (protected)
 router.get("/users", verifyToken, verifyAdmin, getAllUsers);
 router.put("/approve/:id", verifyToken, verifyAdmin, approveUser);
+router.delete("/user/:id", verifyToken, verifyAdmin, deleteUser);
 
 // template management (protected)
 router.post("/template", verifyToken, verifyAdmin, createTemplate);
+router.put("/template/:id", verifyToken, verifyAdmin, updateTemplate);
 router.get("/templates", verifyToken, verifyAdmin, getAllTemplates);
 router.delete("/template/:id", verifyToken, verifyAdmin, deleteTemplate);
 

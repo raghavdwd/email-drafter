@@ -82,6 +82,26 @@ export const approveUser = async (req, res) => {
     console.error('approve user error:', error);
     return res.status(500).json({ error: 'failed to approve user' });
   }
+  };
+// delete a user by id
+export const deleteUser = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const user = await User.findByPk(parseInt(id));
+    if (!user) {
+      return res.status(404).json({ error: 'user not found' });
+    }
+
+    await user.destroy();
+
+    return res.status(200).json({
+      message: 'user deleted successfully',
+    });
+  } catch (error) {
+    console.error('delete user error:', error);
+    return res.status(500).json({ error: 'failed to delete user' });
+  }
 };
 
 // create email template
@@ -120,6 +140,37 @@ export const getAllTemplates = async (req, res) => {
   } catch (error) {
     console.error('get templates error:', error);
     return res.status(500).json({ error: 'failed to fetch templates' });
+  }
+};
+
+// update template by id
+export const updateTemplate = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, subject, body } = req.body;
+
+    if (!name || !subject || !body) {
+      return res.status(400).json({ error: 'name, subject, and body are required' });
+    }
+
+    const template = await EmailTemplate.findByPk(parseInt(id));
+
+    if (!template) {
+      return res.status(404).json({ error: 'template not found' });
+    }
+
+    template.name = name;
+    template.subject = subject;
+    template.body = body;
+    await template.save();
+
+    return res.status(200).json({
+      message: 'template updated successfully',
+      template,
+    });
+  } catch (error) {
+    console.error('update template error:', error);
+    return res.status(500).json({ error: 'failed to update template' });
   }
 };
 

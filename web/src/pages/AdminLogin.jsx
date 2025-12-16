@@ -46,14 +46,15 @@ const AdminLogin = () => {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-base-100">
-      <div className="card w-96 bg-base-200 shadow-xl">
+      <div className="card w-96 bg-base-100 shadow-2xl border border-base-content/10">
         <div className="card-body">
-          <h2 className="card-title text-base-content justify-center text-2xl mb-4">
-            admin login
+          <h2 className="card-title justify-center text-3xl font-bold mb-6 text-base-content">
+            Admin Login
           </h2>
 
           {error && (
-            <div className="alert alert-error mb-4">
+            <div className="alert alert-error mb-4 rounded-lg">
+              <svg xmlns="http://www.w3.org/2000/svg" className="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
               <span>{error}</span>
             </div>
           )}
@@ -61,12 +62,12 @@ const AdminLogin = () => {
           <form onSubmit={handleSubmit}>
             <div className="form-control mb-4">
               <label className="label">
-                <span className="label-text text-base-content">email</span>
+                <span className="label-text font-medium text-base-content">Email</span>
               </label>
               <input
                 type="email"
                 placeholder="admin@example.com"
-                className="input input-bordered bg-base-300 text-base-content"
+                className="input input-bordered bg-base-200 text-base-content focus:border-primary focus:outline-none"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -75,40 +76,40 @@ const AdminLogin = () => {
 
             <div className="form-control mb-6">
               <label className="label">
-                <span className="label-text text-base-content">password</span>
+                <span className="label-text font-medium text-base-content">Password</span>
               </label>
               <input
                 type="password"
-                placeholder="enter password"
-                className="input input-bordered bg-base-300 text-base-content"
+                placeholder="Enter password"
+                className="input input-bordered bg-base-200 text-base-content focus:border-primary focus:outline-none"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
               />
             </div>
 
-            <div className="form-control">
+            <div className="form-control mt-6">
               <button
                 type="submit"
-                className="btn btn-primary"
+                className="btn btn-primary text-lg"
                 disabled={loading}
               >
                 {loading ? (
                   <span className="loading loading-spinner"></span>
                 ) : (
-                  'login'
+                  'Login'
                 )}
               </button>
             </div>
           </form>
 
-          <div className="divider text-base-content">or</div>
+          <div className="divider text-base-content/20">OR</div>
 
           <button
-            className="btn btn-outline btn-sm"
+            className="btn btn-ghost btn-sm w-full"
             onClick={() => navigate('/')}
           >
-            user login
+            User Login
           </button>
         </div>
       </div>

@@ -1,0 +1,74 @@
+import React, { useContext } from 'react';
+import { AuthContext } from '../context/AuthContext';
+import { useNavigate, useLocation } from 'react-router-dom';
+
+const Navbar = () => {
+  const { user, logout } = useContext(AuthContext);
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const handleLogout = () => {
+    logout();
+    navigate('/');
+  };
+
+  const isActive = (path) => location.pathname === path;
+
+  return (
+    <div className="navbar bg-base-100 border-b border-base-200 px-4">
+      {/* LEFT SIDE: Brand & Navigation */}
+      <div className="navbar-start w-full md:w-auto flex-1">
+        {/* Brand */}
+        <a 
+          className="btn btn-ghost text-xl font-bold normal-case mr-2"
+          onClick={() => navigate('/dashboard')}
+        >
+          Email Drafter
+        </a>
+
+        {/* Desktop Links - inline with brand */}
+        <div className="hidden md:flex items-center gap-1">
+          <button 
+            onClick={() => navigate('/dashboard')}
+            className={`btn btn-sm ${isActive('/dashboard') ? 'btn-neutral' : 'btn-ghost text-base-content/70'}`}
+          >
+            Dashboard
+          </button>
+          <button 
+            onClick={() => navigate('/profile')}
+            className={`btn btn-sm ${isActive('/profile') ? 'btn-neutral' : 'btn-ghost text-base-content/70'}`}
+          >
+            Profile
+          </button>
+        </div>
+      </div>
+
+      {/* RIGHT SIDE: User Menu */}
+      <div className="navbar-end flex-none gap-2">
+        <div className="dropdown dropdown-end">
+          <div tabIndex={0} role="button" className="btn btn-ghost btn-circle avatar border border-base-300">
+            <div className="w-10 rounded-full">
+              <img 
+                alt="user avatar" 
+                src={user?.photo || "https://ui-avatars.com/api/?name=" + (user?.name || "User")} 
+              />
+            </div>
+          </div>
+          <ul tabIndex={0} className="mt-3 z-[1] p-2 shadow-lg menu menu-sm dropdown-content bg-base-100 rounded-box w-52 border border-base-200">
+            <li className="menu-title px-4 py-2 border-b border-base-200 mb-2">
+                <span className="text-base-content font-semibold">{user?.name || 'User'}</span>
+            </li>
+            
+            {/* Mobile links appear in dropdown */}
+            <li className="md:hidden"><a onClick={() => navigate('/dashboard')}>Dashboard</a></li>
+            <li className="md:hidden"><a onClick={() => navigate('/profile')}>Profile</a></li>
+            
+            <li><a onClick={handleLogout} className="text-error font-medium">Logout</a></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default Navbar;

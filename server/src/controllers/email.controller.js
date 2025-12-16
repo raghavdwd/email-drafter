@@ -295,3 +295,319 @@ export const generateDrafts = async (req, res) => {
 };
 
 
+/**
+ * Schedule emails to be sent with time interval
+ */
+export const scheduleEmails = async (req, res) => {
+  try {
+    const { fileId, templateId, intervalSeconds } = req.body;
+    const userId = req.user.id;
+
+    if (!fileId || !templateId || !intervalSeconds) {
+      return res.status(400).json({ error: 'fileId, templateId, and intervalSeconds are required' });
+    }
+
+    if (intervalSeconds < 10) {
+      return res.status(400).json({ error: 'Minimum interval is 10 seconds' });
+    }
+
+    // Import scheduler service
+    const { createScheduledJob } = await import('../services/emailScheduler.js');
+
+    // Create and start the scheduled job
+    const scheduledEmail = await createScheduledJob(userId, fileId, templateId, intervalSeconds, true);
+
+    return res.status(200).json({
+      message: 'Email sending scheduled successfully',
+      scheduledEmailId: scheduledEmail.id,
+      totalCount: scheduledEmail.totalCount,
+      intervalSeconds: scheduledEmail.timeIntervalSeconds,
+    });
+  } catch (error) {
+    console.error('schedule emails error:', error);
+    return res.status(500).json({ error: error.message || 'Failed to schedule emails' });
+  }
+};
+
+/**
+ * Send emails immediately with time interval
+ */
+export const sendEmailsNow = async (req, res) => {
+  try {
+    const { fileId, templateId, intervalSeconds } = req.body;
+    const userId = req.user.id;
+
+    if (!fileId || !templateId || !intervalSeconds) {
+      return res.status(400).json({ error: 'fileId, templateId, and intervalSeconds are required' });
+    }
+
+    if (intervalSeconds < 10) {
+      return res.status(400).json({ error: 'Minimum interval is 10 seconds' });
+    }
+
+    // Import scheduler service
+    const { createScheduledJob } = await import('../services/emailScheduler.js');
+
+    // Create and start the scheduled job immediately
+    const scheduledEmail = await createScheduledJob(userId, fileId, templateId, intervalSeconds, true);
+
+    return res.status(200).json({
+      message: 'Email sending started successfully',
+      scheduledEmailId: scheduledEmail.id,
+      totalCount: scheduledEmail.totalCount,
+      intervalSeconds: scheduledEmail.timeIntervalSeconds,
+    });
+  } catch (error) {
+    console.error('send emails now error:', error);
+    return res.status(500).json({ error: error.message || 'Failed to send emails' });
+  }
+};
+
+/**
+ * Get all scheduled jobs for the user
+ */
+export const getScheduledJobs = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const { getActiveJobs } = await import('../services/emailScheduler.js');
+    const jobs = await getActiveJobs(userId);
+
+    return res.status(200).json({ jobs });
+  } catch (error) {
+    console.error('get scheduled jobs error:', error);
+    return res.status(500).json({ error: 'Failed to fetch scheduled jobs' });
+  }
+};
+
+/**
+ * Pause a scheduled job
+ */
+export const pauseScheduledJob = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+
+    // Verify job belongs to user
+    const ScheduledEmail = (await import('../models/scheduledEmail.js')).default;
+    const scheduledEmail = await ScheduledEmail.findByPk(id);
+
+    if (!scheduledEmail) {
+      return res.status(404).json({ error: 'Scheduled job not found' });
+    }
+
+    if (scheduledEmail.userId !== userId) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    const { pauseJob } = await import('../services/emailScheduler.js');
+    const updatedJob = await pauseJob(parseInt(id));
+
+    return res.status(200).json({
+      message: 'Job paused successfully',
+      job: updatedJob,
+    });
+  } catch (error) {
+    console.error('pause scheduled job error:', error);
+    return res.status(500).json({ error: error.message || 'Failed to pause job' });
+  }
+};
+
+/**
+ * Resume a paused scheduled job
+ */
+export const resumeScheduledJob = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+
+    // Verify job belongs to user
+    const ScheduledEmail = (await import('../models/scheduledEmail.js')).default;
+    const scheduledEmail = await ScheduledEmail.findByPk(id);
+
+    if (!scheduledEmail) {
+      return res.status(404).json({ error: 'Scheduled job not found' });
+    }
+
+    if (scheduledEmail.userId !== userId) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    const { resumeJob } = await import('../services/emailScheduler.js');
+    const updatedJob = await resumeJob(parseInt(id));
+
+    return res.status(200).json({
+      message: 'Job resumed successfully',
+      job: updatedJob,
+    });
+  } catch (error) {
+    console.error('resume scheduled job error:', error);
+    return res.status(500).json({ error: error.message || 'Failed to resume job' });
+  }
+};
+
+/**
+ * Cancel a scheduled job
+ */
+export const cancelScheduledJob = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+
+    // Verify job belongs to user
+    const ScheduledEmail = (await import('../models/scheduledEmail.js')).default;
+    const scheduledEmail = await ScheduledEmail.findByPk(id);
+
+    if (!scheduledEmail) {
+      return res.status(404).json({ error: 'Scheduled job not found' });
+    }
+
+    if (scheduledEmail.userId !== userId) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    const { cancelJob } = await import('../services/emailScheduler.js');
+    const updatedJob = await cancelJob(parseInt(id));
+
+    return res.status(200).json({
+      message: 'Job cancelled successfully',
+      job: updatedJob,
+    });
+  } catch (error) {
+    console.error('cancel scheduled job error:', error);
+    return res.status(500).json({ error: error.message || 'Failed to cancel job' });
+  }
+};
+
+/**
+ * Get sent emails history
+ */
+export const getSentEmails = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { scheduledEmailId } = req.query;
+
+    const { getSentEmailsHistory } = await import('../services/emailScheduler.js');
+    const sentEmails = await getSentEmailsHistory(userId, scheduledEmailId ? parseInt(scheduledEmailId) : null);
+
+    return res.status(200).json({ sentEmails });
+  } catch (error) {
+    console.error('get sent emails error:', error);
+    return res.status(500).json({ error: 'Failed to fetch sent emails' });
+  }
+};
+
+/**
+ * Get all uploaded files history for user
+ */
+export const getUploadedFiles = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const offset = (page - 1) * limit;
+
+    // Count distinct fileIds for pagination
+    const totalItems = await UploadedRow.count({
+        distinct: true,
+        col: 'file_id'
+    });
+
+    const uploads = await UploadedRow.findAll({
+      attributes: [
+        'fileId',
+        [UploadedRow.sequelize.fn('COUNT', UploadedRow.sequelize.col('id')), 'rowCount'],
+        [UploadedRow.sequelize.fn('MIN', UploadedRow.sequelize.col('created_at')), 'createdAt']
+      ],
+      group: ['fileId'],
+      order: [[UploadedRow.sequelize.fn('MIN', UploadedRow.sequelize.col('created_at')), 'DESC']],
+      limit: limit,
+      offset: offset
+    });
+
+    const totalPages = Math.ceil(totalItems / limit);
+
+    return res.status(200).json({ 
+      uploads,
+      pagination: {
+        totalItems,
+        totalPages,
+        currentPage: page,
+        itemsPerPage: limit
+      }
+    });
+  } catch (error) {
+    console.error('get uploaded files error:', error);
+    return res.status(500).json({ error: 'Failed to fetch uploaded files' });
+  }
+};
+
+/**
+ * Delete sent emails (from DB and Gmail)
+ */
+export const deleteSentEmails = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { emailIds } = req.body; // Array of sent_emails IDs (DB IDs)
+
+    if (!Array.isArray(emailIds) || emailIds.length === 0) {
+      return res.status(400).json({ error: 'No email IDs provided' });
+    }
+
+    const SentEmail = (await import('../models/sentEmail.js')).default;
+    
+    // Fetch emails to get Gmail message IDs
+    const emailsToDelete = await SentEmail.findAll({
+      where: {
+        id: emailIds,
+        userId: userId
+      }
+    });
+
+    if (emailsToDelete.length === 0) {
+      return res.status(404).json({ error: 'No matching emails found to delete' });
+    }
+
+    // Extract Gmail message IDs
+    const gmailMessageIds = emailsToDelete
+      .filter(email => email.messageId)
+      .map(email => email.messageId);
+
+    // Delete from Gmail if there are valid message IDs
+    if (gmailMessageIds.length > 0) {
+      const user = await User.findByPk(userId);
+      
+      // Check for token refresh
+      const { isTokenExpired, refreshAccessToken, getGmailClient } = await import('../utils/gmailAuth.js');
+      if (user.gmailTokenExpiry && isTokenExpired(user.gmailTokenExpiry)) {
+         const newTokens = await refreshAccessToken(user.gmailRefreshToken);
+         user.gmailAccessToken = newTokens.access_token;
+         await user.save();
+      }
+
+      // Initialize Gmail client
+      const gmailClient = getGmailClient(user);
+      
+      // Call batch delete
+      const { deleteMessages } = await import('../utils/gmailService.js');
+      await deleteMessages(gmailClient, gmailMessageIds);
+    }
+
+    // Delete from Database
+    await SentEmail.destroy({
+      where: {
+        id: emailIds,
+        userId: userId
+      }
+    });
+
+    return res.status(200).json({ 
+      message: `Successfully deleted ${emailsToDelete.length} emails`,
+      deletedIds: emailsToDelete.map(e => e.id)
+    });
+
+  } catch (error) {
+    console.error('delete sent emails error:', error);
+    return res.status(500).json({ error: error.message || 'Failed to delete emails' });
+  }
+};
