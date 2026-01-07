@@ -1,12 +1,16 @@
-import React, { useState, useEffect } from 'react';
-import { createTemplate, getAllTemplatesAdmin, deleteTemplate, updateTemplate, getAllVariablesAdmin } from '../../utils/emailApi';
+import React, { useState, useEffect, useCallback } from 'react';
+import { createTemplate, getAllTemplatesAdmin, deleteTemplate, updateTemplate, getAllVariablesAdmin, createVariable } from '../../utils/emailApi';
+import { useNavigate } from 'react-router-dom';
 
 const AdminTemplates = () => {
+    const navigate = useNavigate();
     const [templates, setTemplates] = useState([]);
     const [variables, setVariables] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
+    const [newVariablesNotification, setNewVariablesNotification] = useState([]);
+    const [isCreatingVariable, setIsCreatingVariable] = useState(false);
     
     // Edit mode state
     const [editingId, setEditingId] = useState(null);
@@ -21,6 +25,117 @@ const AdminTemplates = () => {
         fetchTemplates();
         fetchVariables();
     }, []);
+
+    const extractVariables = useCallback((text) => {
+        const regex = /\{\{([^}]+)\}\}/g;
+        const matches = [];
+        let match;
+        while ((match = regex.exec(text)) !== null) {
+            const varName = match[1].trim();
+            if (!matches.includes(varName)) {
+                matches.push(varName);
+            }
+        }
+        return matches;
+    }, []);
+
+    const detectNewVariables = useCallback((subject, body) => {
+        const subjectVars = extractVariables(subject);
+        const bodyVars = extractVariables(body);
+        const allVars = [...subjectVars, ...bodyVars];
+        
+        const existingVarNames = variables.map(v => v.variableName);
+        const newVars = allVars.filter(v => !existingVarNames.includes(v));
+        return [...new Set(newVars)];
+    }, [extractVariables, variables]);
+
+    const handleTemplateFormChange = (e) => {
+        const { name, value } = e.target;
+        setTemplateForm(prev => ({ ...prev, [name]: value }));
+        
+        if (name === 'subject' || name === 'body') {
+            const newVars = detectNewVariables(
+                name === 'subject' ? value : templateForm.subject,
+                name === 'body' ? value : templateForm.body
+            );
+            setNewVariablesNotification(newVars);
+        }
+    };
+
+    const handleCreateVariable = async (variableName) => {
+        setIsCreatingVariable(true);
+        try {
+            const camelCaseKey = variableName
+                .split(' ')
+                .map((word, index) => 
+                    index === 0 
+                        ? word.toLowerCase() 
+                        : word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+                )
+                .join('');
+            
+            await createVariable({
+                variableName,
+                variableKey: camelCaseKey,
+                variableType: 'text',
+                description: `Auto-detected from template: ${variableName}`
+            });
+            
+            setSuccess(`Variable "${variableName}" created successfully`);
+            setTimeout(() => setSuccess(''), 3000);
+            await fetchVariables();
+            setNewVariablesNotification(prev => prev.filter(v => v !== variableName));
+        } catch (err) {
+            setError(err.response?.data?.error || 'Failed to create variable');
+        } finally {
+            setIsCreatingVariable(false);
+        }
+    };
+
+    const handleCreateAllVariables = async () => {
+        setIsCreatingVariable(true);
+        let created = 0;
+        let failed = 0;
+        
+        for (const varName of newVariablesNotification) {
+            try {
+                const camelCaseKey = varName
+                    .split(' ')
+                    .map((word, index) => 
+                        index === 0 
+                            ? word.toLowerCase() 
+                            : word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+                    )
+                    .join('');
+                
+                await createVariable({
+                    variableName: varName,
+                    variableKey: camelCaseKey,
+                    variableType: 'text',
+                    description: `Auto-detected from template: ${varName}`
+                });
+                created++;
+            } catch (err) {
+                failed++;
+            }
+        }
+        
+        if (created > 0) {
+            setSuccess(`Created ${created} variable${created > 1 ? 's' : ''}${failed > 0 ? `, ${failed} failed` : ''}`);
+            setTimeout(() => setSuccess(''), 3000);
+        }
+        if (failed > 0 && created === 0) {
+            setError('Failed to create variables');
+        }
+        
+        await fetchVariables();
+        setNewVariablesNotification([]);
+        setIsCreatingVariable(false);
+    };
+
+    const handleGoToVariables = () => {
+        navigate('/admin/dashboard/variables');
+    };
 
     const fetchTemplates = async () => {
         try {
@@ -38,16 +153,11 @@ const AdminTemplates = () => {
         try {
             const data = await getAllVariablesAdmin();
             setVariables(data.variables || []);
+            const newVars = detectNewVariables(templateForm.subject, templateForm.body);
+            setNewVariablesNotification(newVars);
         } catch (err) {
             console.error('fetch variables error:', err);
         }
-    };
-
-    const handleTemplateFormChange = (e) => {
-        setTemplateForm({
-            ...templateForm,
-            [e.target.name]: e.target.value,
-        });
     };
 
     const handleSubmit = async (e) => {
@@ -87,6 +197,8 @@ const AdminTemplates = () => {
         });
         setError('');
         setSuccess('');
+        const newVars = detectNewVariables(template.subject, template.body);
+        setNewVariablesNotification(newVars);
     };
 
     const handleCancelEdit = () => {
@@ -97,6 +209,7 @@ const AdminTemplates = () => {
         setEditingId(null);
         setTemplateForm({ name: '', subject: '', body: '' });
         setError('');
+        setNewVariablesNotification([]);
     };
 
     const handleDeleteTemplate = async (id) => {
@@ -134,7 +247,52 @@ const AdminTemplates = () => {
                         {error && <div className="alert alert-error text-sm py-2 rounded mb-2 w-full"><span>{error}</span></div>}
                         {success && <div className="alert alert-success text-sm py-2 rounded mb-2 w-full"><span>{success}</span></div>}
 
-                        <form onSubmit={handleSubmit} className="space-y-4">
+                         <form onSubmit={handleSubmit} className="space-y-4">
+                            
+                            {/* New Variables Notification */}
+                            {newVariablesNotification.length > 0 && (
+                                <div className="alert alert-warning shadow-lg">
+                                    <div>
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                                        <div>
+                                            <span className="font-semibold">New variables detected!</span>
+                                            <div className="flex flex-wrap gap-2 mt-2">
+                                                {newVariablesNotification.map((varName) => (
+                                                    <div key={varName} className="flex items-center gap-1 bg-warning/20 px-2 py-1 rounded">
+                                                        <span className="font-mono text-sm">{`{{${varName}}}`}</span>
+                                                        <button 
+                                                            type="button"
+                                                            onClick={() => handleCreateVariable(varName)}
+                                                            className="btn btn-xs btn-success"
+                                                            disabled={isCreatingVariable}
+                                                        >
+                                                            Create
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                            <div className="flex gap-2 mt-2">
+                                                <button 
+                                                    type="button"
+                                                    onClick={handleCreateAllVariables}
+                                                    className="btn btn-xs btn-success"
+                                                    disabled={isCreatingVariable}
+                                                >
+                                                    {isCreatingVariable ? <span className="loading loading-spinner loading-xs"></span> : 'Create All'}
+                                                </button>
+                                                <button 
+                                                    type="button"
+                                                    onClick={handleGoToVariables}
+                                                    className="btn btn-xs btn-ghost"
+                                                >
+                                                    Manage Variables
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
                             <div className="form-control w-full">
                                 <label className="label"><span className="label-text font-medium">Template Name</span></label>
                                 <input type="text" name="name" value={templateForm.name} onChange={handleTemplateFormChange} placeholder="e.g., Cold Email" className="input input-bordered w-full" />
