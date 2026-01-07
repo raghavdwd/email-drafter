@@ -123,6 +123,12 @@ export const replacePlaceholders = async (text, row) => {
       return `__IMAGE_PLACEHOLDER_${imageId}__`;
     }
     
+    // Special handling for Calendar Link - show as clickable "Link" text
+    if (trimmedName === 'Calendar Link' && value) {
+      const linkUrl = String(value).trim();
+      return `<a href="${linkUrl}" target="_blank" rel="noopener noreferrer" style="color: #1a73e8; text-decoration: underline;">Link</a>`;
+    }
+    
     // For non-image variables, return the value
     return value;
   });

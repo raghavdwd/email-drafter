@@ -727,26 +727,52 @@ const Dashboard = () => {
                   {/* Required Columns for Template */}
                   {validationResult && (
                     <div className="mt-4">
-                      <label className="label py-1">
-                        <span className="label-text text-sm font-medium text-base-content/70">
-                          Required Columns for this Template:
-                        </span>
-                      </label>
+                      <div className="flex items-center justify-between mb-3">
+                        <label className="label py-1">
+                          <span className="label-text text-sm font-medium text-base-content/70">
+                            Template Variables:
+                          </span>
+                        </label>
+                        {validationResult.summary && (
+                          <div className="flex gap-2 text-xs">
+                            <span className="badge badge-success badge-sm gap-1">
+                              {validationResult.summary.matched} matched
+                            </span>
+                            {validationResult.summary.missing > 0 && (
+                              <span className="badge badge-error badge-sm gap-1">
+                                {validationResult.summary.missing} missing
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
                       <div className="flex flex-wrap gap-2">
                         {validationResult.variables.map((variable, idx) => (
                           <div
                             key={idx}
                             onClick={handleElementCopyEvent}
-                            className="badge badge-neutral badge-outline gap-1 text-xs py-3"
+                            className={`badge badge-outline gap-1 text-xs py-3 cursor-pointer hover:scale-105 transition-transform ${
+                              variable.hasData ? 'badge-success' : 'badge-error'
+                            }`}
+                            title={variable.hasData ? `Value: ${variable.sampleValue || 'N/A'}` : 'Missing from Excel file'}
                           >
                             <span className="font-semibold">
                               {variable.name}
                             </span>
+                            {variable.hasData ? (
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                              </svg>
+                            ) : (
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            )}
                           </div>
                         ))}
                       </div>
                       <div className="mt-2 text-xs text-base-content/50">
-                        Ensure your Excel file has these columns.
+                        Click any variable to copy. Green = has data, Red = missing
                       </div>
                     </div>
                   )}

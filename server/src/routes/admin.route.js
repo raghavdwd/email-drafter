@@ -1,11 +1,14 @@
 import express from "express";
-import { adminLogin, getAllUsers, approveUser, createTemplate, getAllTemplates, deleteTemplate, updateTemplate, deleteUser, createVariable, getAllVariables, updateVariable, deleteVariable } from "../controllers/admin.controller.js";
+import { adminLogin, getAllUsers, approveUser, createTemplate, getAllTemplates, deleteTemplate, updateTemplate, deleteUser, createVariable, getAllVariables, updateVariable, deleteVariable, getDashboardStats } from "../controllers/admin.controller.js";
 import { verifyToken, verifyAdmin } from "../middleware/auth.middleware.js";
 
 const router = express.Router();
 
 // admin auth
 router.post("/login", adminLogin);
+
+// dashboard stats
+router.get("/stats", verifyToken, verifyAdmin, getDashboardStats);
 
 // user management (protected)
 router.get("/users", verifyToken, verifyAdmin, getAllUsers);

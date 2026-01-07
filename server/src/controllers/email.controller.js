@@ -684,18 +684,73 @@ export const validateTemplateMapping = async (req, res) => {
       !['id', 'fileId', 'created_at', 'createdAt', 'updated_at', 'updatedAt'].includes(key)
     );
 
-    // Check each used variable to see if data exists
+    // Parse rawData for original Excel column names
+    let excelData = {};
+    if (rowData.rawData) {
+      try {
+        excelData = JSON.parse(rowData.rawData);
+      } catch (e) {
+        console.error('Failed to parse rawData in validation:', e);
+      }
+    }
+
+    // Legacy fallback map for old column names
+    const legacyMap = {
+      'First Name': 'firstName',
+      'Name': 'firstName',
+      'Client Business Name': 'clientBusinessName',
+      'Company Name': 'clientBusinessName',
+      'Website': 'website',
+      'Client Website': 'website',
+      'Client Traffic': 'clientTraffic',
+      'Competitor Name': 'competitorName',
+      'Competitor Business Name 1': 'competitorName',
+      'Competitor Traffic': 'competitorTraffic',
+      'Competitor Traffic 1': 'competitorTraffic',
+      'Competitor Website': 'competitorWebsite',
+      'Competitor Website 1': 'competitorWebsite',
+      'Competitor Name 2': 'competitorName2',
+      'Competitor Business Name 2': 'competitorName2',
+      'Competitor Traffic 2': 'competitorTraffic2',
+      'Competitor Website 2': 'competitorWebsite2',
+      'Calendar Link': 'calendarLink',
+      'Client Screenshot URL': 'clientScreenshotUrl',
+      'Client Screenshot': 'clientScreenshotUrl',
+      'Client SS': 'clientScreenshotUrl',
+      'Competitor Screenshot URL': 'competitorScreenshotUrl',
+      'Competitor Screenshot': 'competitorScreenshotUrl',
+      'Sending Account Name': 'sendingAccountName',
+      'Email': 'sendingAccountName',
+    };
+
+    // Check each used variable to see if data exists (same logic as replacePlaceholders)
     const variableStatus = usedVariables.map(variable => {
-      const hasData = rowData[variable.variableKey] !== null && 
-                      rowData[variable.variableKey] !== undefined &&
-                      rowData[variable.variableKey] !== '';
+      const varName = variable.variableName;
+      
+      let hasData = false;
+      let sampleVal = null;
+
+      // Try: rawData Excel column > database column > legacy mapping
+      if (excelData[varName] !== undefined && excelData[varName] !== null && excelData[varName] !== '') {
+        hasData = true;
+        sampleVal = excelData[varName];
+      } else if (rowData[varName] !== undefined && rowData[varName] !== null && rowData[varName] !== '') {
+        hasData = true;
+        sampleVal = rowData[varName];
+      } else {
+        const legacyKey = legacyMap[varName];
+        if (legacyKey && rowData[legacyKey] !== undefined && rowData[legacyKey] !== null && rowData[legacyKey] !== '') {
+          hasData = true;
+          sampleVal = rowData[legacyKey];
+        }
+      }
       
       return {
         name: variable.variableName,
         key: variable.variableKey,
         type: variable.variableType,
         hasData,
-        sampleValue: hasData ? String(rowData[variable.variableKey]).substring(0, 50) : null,
+        sampleValue: hasData ? String(sampleVal).substring(0, 50) : null,
       };
     });
 
