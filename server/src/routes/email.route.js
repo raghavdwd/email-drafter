@@ -14,7 +14,8 @@ import {
   getSentEmails,
   deleteSentEmails,
   getUploadedFiles,
-  validateTemplateMapping
+  validateTemplateMapping,
+  previewEmail,
 } from '../controllers/email.controller.js';
 import { uploadMiddleware } from '../middleware/uploadMiddleware.js';
 import { verifyToken } from '../middleware/auth.middleware.js';
@@ -59,6 +60,9 @@ router.get('/email/uploads', verifyToken, getUploadedFiles);
 
 // Validate template variable mapping with Excel data
 router.get('/template/validate', verifyToken, validateTemplateMapping);
+
+// Preview email with real data
+router.get('/template/preview', verifyToken, previewEmail);
 
 // Get all templates with full details for users (Variables Guide)
 router.get('/templates/all', verifyToken, getAllTemplatesForUser);

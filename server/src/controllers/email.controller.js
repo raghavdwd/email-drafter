@@ -771,3 +771,58 @@ export const validateTemplateMapping = async (req, res) => {
     return res.status(500).json({ error: 'Failed to validate template mapping' });
   }
 };
+
+/**
+ * Preview email with real data from a specific row
+ */
+export const previewEmail = async (req, res) => {
+  try {
+    const { fileId, templateId, rowNumber } = req.query;
+
+    if (!fileId || !templateId) {
+      return res.status(400).json({ error: 'fileId and templateId are required' });
+    }
+
+    // fetch template
+    const template = await EmailTemplate.findByPk(parseInt(templateId));
+
+    if (!template) {
+      return res.status(404).json({ error: 'Template not found' });
+    }
+
+    // fetch rows for this fileId
+    const allRows = await UploadedRow.findAll({
+      where: { fileId },
+      order: [['id', 'ASC']],
+    });
+
+    if (allRows.length === 0) {
+      return res.status(404).json({ error: 'No rows found for this fileId' });
+    }
+
+    // Use specified row or default to first row
+    const rowIndex = rowNumber ? parseInt(rowNumber) - 1 : 0;
+    const safeIndex = Math.max(0, Math.min(rowIndex, allRows.length - 1));
+    const sampleRow = allRows[safeIndex];
+
+    // Replace placeholders with actual data
+    const { replacePlaceholders } = await import('../utils/templateHelper.js');
+    const subjectResult = await replacePlaceholders(template.subject, sampleRow);
+    const bodyResult = await replacePlaceholders(template.body, sampleRow);
+
+    const subject = typeof subjectResult === 'string' ? subjectResult : subjectResult.text;
+    const body = typeof bodyResult === 'string' ? bodyResult : bodyResult.text;
+    const images = typeof bodyResult === 'object' ? bodyResult.images : [];
+
+    return res.status(200).json({
+      subject,
+      body,
+      images,
+      rowNumber: safeIndex + 1,
+      recipientEmail: sampleRow.sendingAccountName || '',
+    });
+  } catch (error) {
+    console.error('preview email error:', error);
+    return res.status(500).json({ error: 'Failed to generate email preview' });
+  }
+};

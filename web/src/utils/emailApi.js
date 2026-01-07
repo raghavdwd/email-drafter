@@ -310,3 +310,17 @@ export const validateTemplateMapping = async (fileId, templateId) => {
   });
   return response.data;
 };
+
+/**
+ * Preview email with real data from a specific row
+ * @param {string} fileId - File ID from upload
+ * @param {number} templateId - Template ID
+ * @param {number} rowNumber - Row number to preview (optional, defaults to first row)
+ * @returns {Promise<{subject: string, body: string, rowNumber: number, recipientEmail: string}>}
+ */
+export const previewEmail = async (fileId, templateId, rowNumber = 1) => {
+  const response = await api.get('/template/preview', {
+    params: { fileId, templateId, rowNumber }
+  });
+  return response.data;
+};
