@@ -121,7 +121,8 @@ const Dashboard = () => {
       setFileId(data.fileId);
       setRowCount(data.count);
       setEndRow(data.count); // Set default end to total rows
-      setSuccess(`Successfully uploaded ${data.count} rows`);
+      // setSuccess("Successfully uploaded Excel file");
+      toast.success(`Successfully uploaded ${data.count} rows`);
       setTimeout(() => setSuccess(""), 3000);
     } catch (err) {
       setError(err.response?.data?.error || "Failed to upload Excel file");
@@ -305,11 +306,27 @@ const Dashboard = () => {
       {/* main content */}
       <div className="container mx-auto p-4 max-w-5xl">
         <div className="text-center mb-10">
-          <h1 className="text-4xl font-extrabold text-base-content mb-2 tracking-tight">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-4">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-8 w-8 text-primary"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+              />
+            </svg>
+          </div>
+          <h1 className="text-4xl font-bold text-base-content mb-2">
             Email Drafter
           </h1>
-          <p className="text-lg text-base-content/70">
-            Streamline your outreach with automated drafts and scheduled sending
+          <p className="text-lg text-base-content/60">
+            Create professional email drafts and schedule automated sending
           </p>
         </div>
 
@@ -382,21 +399,47 @@ const Dashboard = () => {
         ) : (
           <>
             {/* Status Bar */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-10">
               {/* Gmail Status */}
               <div
                 className={`card shadow-md border ${
                   gmailConnected
                     ? "bg-success/5 border-success/20"
                     : "bg-base-100 border-base-200"
-                } transition-all`}
+                } transition-all hover:shadow-lg`}
               >
-                <div className="card-body p-6 flex flex-row items-center justify-between">
-                  <div>
-                    <h3 className="font-bold text-lg mb-1">Gmail Status</h3>
-                    <p className="text-sm opacity-80">
-                      {gmailConnected ? "Connected & Ready" : "Not Connected"}
-                    </p>
+                <div className="card-body p-5 flex flex-row items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={`p-2 rounded-lg ${
+                        gmailConnected ? "bg-success/20" : "bg-base-200"
+                      }`}
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className={`h-6 w-6 ${
+                          gmailConnected
+                            ? "text-success"
+                            : "text-base-content/50"
+                        }`}
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+                        />
+                      </svg>
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-base-content">Gmail</h3>
+                      <p className="text-sm opacity-70">
+                        {gmailConnected ? "Connected" : "Not Connected"}
+                      </p>
+                    </div>
                   </div>
                   <div className="flex flex-col gap-2">
                     {checkingConnection ? (
@@ -426,13 +469,43 @@ const Dashboard = () => {
                   fileId
                     ? "bg-primary/5 border-primary/20"
                     : "bg-base-100 border-base-200"
-                } transition-all`}
+                } transition-all hover:shadow-lg`}
               >
-                <div className="card-body p-6">
-                  <h3 className="font-bold text-lg mb-1">Data Source</h3>
-                  <p className="text-sm opacity-80">
-                    {fileId ? `${rowCount} Rows Loaded` : "No File Uploaded"}
-                  </p>
+                <div className="card-body p-5 flex flex-row items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={`p-2 rounded-lg ${
+                        fileId ? "bg-primary/20" : "bg-base-200"
+                      }`}
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className={`h-6 w-6 ${
+                          fileId ? "text-primary" : "text-base-content/50"
+                        }`}
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                        />
+                      </svg>
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-base-content">
+                        Data Source
+                      </h3>
+                      <p className="text-sm opacity-70">
+                        {fileId
+                          ? `${rowCount} Rows Loaded`
+                          : "No File Uploaded"}
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -442,15 +515,45 @@ const Dashboard = () => {
                   selectedTemplate
                     ? "bg-secondary/5 border-secondary/20"
                     : "bg-base-100 border-base-200"
-                } transition-all`}
+                } transition-all hover:shadow-lg`}
               >
-                <div className="card-body p-6">
-                  <h3 className="font-bold text-lg mb-1">Template</h3>
-                  <p className="text-sm opacity-80">
-                    {selectedTemplate
-                      ? "Template Selected"
-                      : "No Template Selected"}
-                  </p>
+                <div className="card-body p-5 flex flex-row items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={`p-2 rounded-lg ${
+                        selectedTemplate ? "bg-secondary/20" : "bg-base-200"
+                      }`}
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className={`h-6 w-6 ${
+                          selectedTemplate
+                            ? "text-secondary"
+                            : "text-base-content/50"
+                        }`}
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                        />
+                      </svg>
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-base-content">
+                        Template
+                      </h3>
+                      <p className="text-sm opacity-70">
+                        {selectedTemplate
+                          ? "Template Selected"
+                          : "No Template Selected"}
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -634,9 +737,9 @@ const Dashboard = () => {
                           <div
                             key={idx}
                             onClick={handleElementCopyEvent}
-                            className="badge text-white badge-neutral badge-outline gap-1 text-xs py-3"
+                            className="badge badge-neutral badge-outline gap-1 text-xs py-3"
                           >
-                            <span className="font-semibold text-white">
+                            <span className="font-semibold">
                               {variable.name}
                             </span>
                           </div>

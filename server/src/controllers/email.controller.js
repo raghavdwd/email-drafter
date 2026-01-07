@@ -26,24 +26,8 @@ export const uploadExcel = async (req, res) => {
       return res.status(400).json({ error: 'Excel file is empty' });
     }
 
-    // validate required columns based on new template structure
-    // Note: Only core fields are required, competitor data is optional
-    const requiredColumns = [
-      'Website',
-      'Company Name',
-      'Client Traffic',
-      'Name',
-      'Email',
-    ];
-
-    const firstRow = data[0];
-    const missingColumns = requiredColumns.filter(col => !(col in firstRow));
-
-    if (missingColumns.length > 0) {
-      return res.status(400).json({
-        error: `Missing required columns: ${missingColumns.join(', ')}`,
-      });
-    }
+    // Removed required columns validation - all columns are now optional
+    // Users can upload Excel files without any required columns
 
     // generate unique fileId for this upload
     const fileId = uuidv4();
