@@ -1,9 +1,49 @@
-import UploadedRow from '../models/uploadedRow.js';
-import EmailTemplate from '../models/emailTemplate.js';
-import User from '../models/user.js';
-import xlsx from 'xlsx';
-import { v4 as uuidv4 } from 'uuid';
-import { replacePlaceholders, generateGmailDraftUrl } from '../utils/templateHelper.js';
+import UploadedRow from "../models/uploadedRow.js";
+import EmailTemplate from "../models/emailTemplate.js";
+import User from "../models/user.js";
+import xlsx from "xlsx";
+import { v4 as uuidv4 } from "uuid";
+import {
+  replacePlaceholders,
+  generateGmailDraftUrl,
+} from "../utils/templateHelper.js";
+
+/**
+ * Helper function to parse traffic values that may contain "k" notation
+ * (e.g., "1.11k" → 1110, "2.66k" → 2660) and handle NaN values safely
+ * @param {any} value - The traffic value from Excel (can be number, string, null, undefined)
+ * @returns {number|null} - Parsed integer value or null if invalid
+ */
+const parseTrafficValue = (value) => {
+  // handling null, undefined, or empty string
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  // if already a valid number, return it directly
+  if (typeof value === "number" && !isNaN(value)) {
+    return Math.round(value);
+  }
+
+  // converting to string and cleaning up
+  const strValue = String(value).toLowerCase().trim();
+
+  // handling "k" notation (e.g., "1.11k" → 1110)
+  if (strValue.endsWith("k")) {
+    const numPart = parseFloat(strValue.slice(0, -1));
+    return isNaN(numPart) ? null : Math.round(numPart * 1000);
+  }
+
+  // handling "m" notation for millions (e.g., "1.5m" → 1500000)
+  if (strValue.endsWith("m")) {
+    const numPart = parseFloat(strValue.slice(0, -1));
+    return isNaN(numPart) ? null : Math.round(numPart * 1000000);
+  }
+
+  // default: try to parse as regular number
+  const parsed = parseFloat(strValue);
+  return isNaN(parsed) ? null : Math.round(parsed);
+};
 
 /**
  * Upload Excel file and save rows to database
@@ -11,19 +51,19 @@ import { replacePlaceholders, generateGmailDraftUrl } from '../utils/templateHel
 export const uploadExcel = async (req, res) => {
   try {
     if (!req.file) {
-      return res.status(400).json({ error: 'No file uploaded' });
+      return res.status(400).json({ error: "No file uploaded" });
     }
 
     // parse excel file from buffer
-    const workbook = xlsx.read(req.file.buffer, { type: 'buffer' });
+    const workbook = xlsx.read(req.file.buffer, { type: "buffer" });
     const sheetName = workbook.SheetNames[0];
     const sheet = workbook.Sheets[sheetName];
-    
+
     // convert to JSON
     const data = xlsx.utils.sheet_to_json(sheet);
 
     if (data.length === 0) {
-      return res.status(400).json({ error: 'Excel file is empty' });
+      return res.status(400).json({ error: "Excel file is empty" });
     }
 
     // Removed required columns validation - all columns are now optional
@@ -35,25 +75,34 @@ export const uploadExcel = async (req, res) => {
     // prepare rows for database
     // Note: Excel columns should match variable display names (e.g., "First Name", "Company Name")
     // Database still uses camelCase keys, but replacePlaceholders now looks for display names first
-    const rows = data.map(row => ({
+    const rows = data.map((row) => ({
       fileId,
       // Core fields - accepting both display names and legacy names
-      firstName: row['First Name'] || row['Name'] || null,
-      clientBusinessName: row['Client Business Name'] || row['Company Name'] || null,
-      clientTraffic: row['Client Traffic'] ? parseInt(row['Client Traffic']) : null,
-      competitorName: row['Competitor Name'] || row['Competitor Business Name 1'] || null,
-      competitorTraffic: row['Competitor Traffic'] || row['Competitor Traffic 1'] ? 
-        parseInt(row['Competitor Traffic'] || row['Competitor Traffic 1']) : null,
-      competitorWebsite: row['Competitor Website'] || row['Competitor Website 1'] || null,
-      competitorName2: row['Competitor Name 2'] || row['Competitor Business Name 2'] || null,
-      competitorTraffic2: row['Competitor Traffic 2'] ? parseInt(row['Competitor Traffic 2']) : null,
-      competitorWebsite2: row['Competitor Website 2'] || null,
-      calendarLink: row['Calendar Link'] || null,
-      clientScreenshotUrl: row['Client Screenshot URL'] || row['Client Screenshot'] || null,
-      competitorScreenshotUrl: row['Competitor Screenshot URL'] || row['Competitor Screenshot'] || null,
-      sendingAccountName: row['Sending Account Name'] || row['Email'] || null,
-      website: row['Website'] || row['Client Website'] || null,
-      
+      firstName: row["First Name"] || row["Name"] || null,
+      clientBusinessName:
+        row["Client Business Name"] || row["Company Name"] || null,
+      clientTraffic: parseTrafficValue(row["Client Traffic"]),
+      competitorName:
+        row["Competitor Name"] || row["Competitor Business Name 1"] || null,
+      competitorTraffic: parseTrafficValue(
+        row["Competitor Traffic"] || row["Competitor Traffic 1"]
+      ),
+      competitorWebsite:
+        row["Competitor Website"] || row["Competitor Website 1"] || null,
+      competitorName2:
+        row["Competitor Name 2"] || row["Competitor Business Name 2"] || null,
+      competitorTraffic2: parseTrafficValue(row["Competitor Traffic 2"]),
+      competitorWebsite2: row["Competitor Website 2"] || null,
+      calendarLink: row["Calendar Link"] || null,
+      clientScreenshotUrl:
+        row["Client Screenshot URL"] || row["Client Screenshot"] || null,
+      competitorScreenshotUrl:
+        row["Competitor Screenshot URL"] ||
+        row["Competitor Screenshot"] ||
+        null,
+      sendingAccountName: row["Sending Account Name"] || row["Email"] || null,
+      website: row["Website"] || row["Client Website"] || null,
+
       // Store ALL Excel columns as JSON for dynamic variable support
       rawData: JSON.stringify(row),
     }));
@@ -66,12 +115,12 @@ export const uploadExcel = async (req, res) => {
       count: rows.length,
     });
   } catch (error) {
-    console.error('upload excel error:', error);
-    console.error('error details:', error.message);
-    console.error('error stack:', error.stack);
-    return res.status(500).json({ 
-      error: 'Failed to upload and parse Excel file',
-      details: error.message 
+    console.error("upload excel error:", error);
+    console.error("error details:", error.message);
+    console.error("error stack:", error.stack);
+    return res.status(500).json({
+      error: "Failed to upload and parse Excel file",
+      details: error.message,
     });
   }
 };
@@ -82,14 +131,16 @@ export const uploadExcel = async (req, res) => {
 export const getTemplates = async (req, res) => {
   try {
     const templates = await EmailTemplate.findAll({
-      attributes: ['id', 'name', 'subject'],
-      order: [['createdAt', 'DESC']],
+      attributes: ["id", "name", "subject"],
+      order: [["createdAt", "DESC"]],
     });
 
     return res.status(200).json({ templates });
   } catch (error) {
-    console.error('get templates error:', error);
-    return res.status(500).json({ error: 'Failed to fetch templates', details: error.message });
+    console.error("get templates error:", error);
+    return res
+      .status(500)
+      .json({ error: "Failed to fetch templates", details: error.message });
   }
 };
 
@@ -99,14 +150,14 @@ export const getTemplates = async (req, res) => {
 export const getAllTemplatesForUser = async (req, res) => {
   try {
     const templates = await EmailTemplate.findAll({
-      attributes: ['id', 'name', 'subject', 'body'],
-      order: [['createdAt', 'DESC']],
+      attributes: ["id", "name", "subject", "body"],
+      order: [["createdAt", "DESC"]],
     });
 
     return res.status(200).json({ templates });
   } catch (error) {
-    console.error('get all templates error:', error);
-    return res.status(500).json({ error: 'Failed to fetch templates' });
+    console.error("get all templates error:", error);
+    return res.status(500).json({ error: "Failed to fetch templates" });
   }
 };
 
@@ -115,18 +166,19 @@ export const getAllTemplatesForUser = async (req, res) => {
  */
 export const getVariablesForUser = async (req, res) => {
   try {
-    const { default: TemplateVariable } = await import('../models/templateVariable.js');
+    const { default: TemplateVariable } = await import(
+      "../models/templateVariable.js"
+    );
     const variables = await TemplateVariable.findAll({
-      order: [['variableName', 'ASC']],
+      order: [["variableName", "ASC"]],
     });
 
     return res.status(200).json({ variables });
   } catch (error) {
-    console.error('get variables error:', error);
-    return res.status(500).json({ error: 'Failed to fetch variables' });
+    console.error("get variables error:", error);
+    return res.status(500).json({ error: "Failed to fetch variables" });
   }
 };
-
 
 /**
  * Generate Gmail drafts using Gmail API
@@ -137,42 +189,60 @@ export const generateDrafts = async (req, res) => {
     const userId = req.user.id; // from auth middleware
 
     if (!fileId || !templateId) {
-      return res.status(400).json({ error: 'fileId and templateId are required' });
+      return res
+        .status(400)
+        .json({ error: "fileId and templateId are required" });
     }
 
     // fetch user with Gmail tokens
     const user = await User.findByPk(userId);
 
     if (!user) {
-      return res.status(404).json({ error: 'User not found' });
+      return res.status(404).json({ error: "User not found" });
     }
 
     // check if Gmail is connected
     if (!user.gmailConnected) {
-      return res.status(400).json({ error: 'Please connect your Gmail account first' });
+      return res
+        .status(400)
+        .json({ error: "Please connect your Gmail account first" });
     }
 
     // check if token is expired and refresh if needed
-    const { isTokenExpired, refreshAccessToken } = await import('../utils/gmailAuth.js');
-    
+    const { isTokenExpired, refreshAccessToken } = await import(
+      "../utils/gmailAuth.js"
+    );
+
     if (user.gmailTokenExpiry && isTokenExpired(user.gmailTokenExpiry)) {
       try {
         const newTokens = await refreshAccessToken(user.gmailRefreshToken);
-        
+
         // update tokens in database
-        await User.update({
-          gmailAccessToken: newTokens.access_token,
-          gmailTokenExpiry: newTokens.expiry_date ? new Date(newTokens.expiry_date) : null,
-        }, {
-          where: { id: userId }
-        });
+        await User.update(
+          {
+            gmailAccessToken: newTokens.access_token,
+            gmailTokenExpiry: newTokens.expiry_date
+              ? new Date(newTokens.expiry_date)
+              : null,
+          },
+          {
+            where: { id: userId },
+          }
+        );
 
         // update user object with new tokens
         user.gmailAccessToken = newTokens.access_token;
-        user.gmailTokenExpiry = newTokens.expiry_date ? new Date(newTokens.expiry_date) : null;
+        user.gmailTokenExpiry = newTokens.expiry_date
+          ? new Date(newTokens.expiry_date)
+          : null;
       } catch (error) {
-        console.error('token refresh error:', error);
-        return res.status(401).json({ error: 'Failed to refresh Gmail token. Please reconnect your Gmail account.' });
+        console.error("token refresh error:", error);
+        return res
+          .status(401)
+          .json({
+            error:
+              "Failed to refresh Gmail token. Please reconnect your Gmail account.",
+          });
       }
     }
 
@@ -180,95 +250,114 @@ export const generateDrafts = async (req, res) => {
     const template = await EmailTemplate.findByPk(parseInt(templateId));
 
     if (!template) {
-      return res.status(404).json({ error: 'Template not found' });
+      return res.status(404).json({ error: "Template not found" });
     }
 
     // fetch all rows for this fileId
     const allRows = await UploadedRow.findAll({
       where: { fileId },
-      order: [['id', 'ASC']],
+      order: [["id", "ASC"]],
     });
 
     if (allRows.length === 0) {
-      return res.status(404).json({ error: 'No rows found for this fileId' });
+      return res.status(404).json({ error: "No rows found for this fileId" });
     }
 
     // Apply row range filtering if provided
     const { startRow, endRow } = req.body;
     let rows = allRows;
-    
-    if (startRow !== undefined || endRow  !== undefined) {
+
+    if (startRow !== undefined || endRow !== undefined) {
       const start = Math.max(1, parseInt(startRow) || 1) - 1; // Convert to 0-indexed
       const end = Math.min(allRows.length, parseInt(endRow) || allRows.length); // Inclusive
       rows = allRows.slice(start, end);
-      
+
       if (rows.length === 0) {
-        return res.status(400).json({ error: 'Invalid row range specified' });
+        return res.status(400).json({ error: "Invalid row range specified" });
       }
     }
 
     // create drafts using Gmail API
-    const { createDraftsInBatch } = await import('../utils/gmailService.js');
-    const { convertLink } = await import('../utils/linkConvert.js');
+    const { createDraftsInBatch } = await import("../utils/gmailService.js");
+    const { convertLink } = await import("../utils/linkConvert.js");
 
     // prepare drafts data with inline image attachments
-    const draftsData = await Promise.all(rows.map(async (rowModel, index) => {
-      // convert sequelize model to plain object
-      const row = rowModel.get({ plain: true });
-      
-      // Replace placeholders - returns text and list of images to embed
-      const subjectResult = await replacePlaceholders(template.subject, row);
-      const bodyResult = await replacePlaceholders(template.body, row);
-      
-      const subject = typeof subjectResult === 'string' ? subjectResult : subjectResult.text;
-      const textBody = typeof bodyResult === 'string' ? bodyResult : bodyResult.text;
-      const imagesToEmbed = bodyResult.images || [];
-      
-      // Prepare attachments array for inline images
-      const attachments = [];
-      let htmlBody = textBody.replace(/\n/g, '<br>');
-      
-      // Process image variables
-      for (let imgIndex = 0; imgIndex < imagesToEmbed.length; imgIndex++) {
-        const imageInfo = imagesToEmbed[imgIndex];
-        const imageUrl = imageInfo.url;
-        
-        if (!imageUrl) continue;
-        
-        // Convert link if needed
-        const { convertLink } = await import('../utils/linkConvert.js');
-        const convertedUrl = convertLink(imageUrl);
-        
-        try {
-          const response = await fetch(convertedUrl);
-          if (response.ok) {
-            const imageBuffer = Buffer.from(await response.arrayBuffer());
-            const cid = `${imageInfo.imageId}_${index}@email`;
-            
-            attachments.push({
-              filename: `${imageInfo.variableName.replace(/\s+/g, '_')}.png`,
-              content: imageBuffer,
-              cid: cid,
-              contentDisposition: 'inline'
-            });
-            
-            // Replace placeholder with img tag
-            const imgTag = `<div style="margin: 20px 0;"><img src="cid:${cid}" alt="${imageInfo.variableName}" style="max-width: 600px; width: 100%; height: auto; display: block; border: 1px solid #ddd; border-radius: 4px;"></div>`;
-            htmlBody = htmlBody.replace(`__IMAGE_PLACEHOLDER_${imageInfo.imageId}__`, imgTag);
-          } else {
-            console.error(`Failed to fetch image for ${imageInfo.variableName}: ${response.status}`);
-            // Remove placeholder if image fetch failed
-            htmlBody = htmlBody.replace(`__IMAGE_PLACEHOLDER_${imageInfo.imageId}__`, `[Image not available: ${imageInfo.variableName}]`);
+    const draftsData = await Promise.all(
+      rows.map(async (rowModel, index) => {
+        // convert sequelize model to plain object
+        const row = rowModel.get({ plain: true });
+
+        // Replace placeholders - returns text and list of images to embed
+        const subjectResult = await replacePlaceholders(template.subject, row);
+        const bodyResult = await replacePlaceholders(template.body, row);
+
+        const subject =
+          typeof subjectResult === "string"
+            ? subjectResult
+            : subjectResult.text;
+        const textBody =
+          typeof bodyResult === "string" ? bodyResult : bodyResult.text;
+        const imagesToEmbed = bodyResult.images || [];
+
+        // Prepare attachments array for inline images
+        const attachments = [];
+        let htmlBody = textBody.replace(/\n/g, "<br>");
+
+        // Process image variables
+        for (let imgIndex = 0; imgIndex < imagesToEmbed.length; imgIndex++) {
+          const imageInfo = imagesToEmbed[imgIndex];
+          const imageUrl = imageInfo.url;
+
+          if (!imageUrl) continue;
+
+          // Convert link if needed
+          const { convertLink } = await import("../utils/linkConvert.js");
+          const convertedUrl = convertLink(imageUrl);
+
+          try {
+            const response = await fetch(convertedUrl);
+            if (response.ok) {
+              const imageBuffer = Buffer.from(await response.arrayBuffer());
+              const cid = `${imageInfo.imageId}_${index}@email`;
+
+              attachments.push({
+                filename: `${imageInfo.variableName.replace(/\s+/g, "_")}.png`,
+                content: imageBuffer,
+                cid: cid,
+                contentDisposition: "inline",
+              });
+
+              // Replace placeholder with img tag
+              const imgTag = `<div style="margin: 20px 0;"><img src="cid:${cid}" alt="${imageInfo.variableName}" style="max-width: 600px; width: 100%; height: auto; display: block; border: 1px solid #ddd; border-radius: 4px;"></div>`;
+              htmlBody = htmlBody.replace(
+                `__IMAGE_PLACEHOLDER_${imageInfo.imageId}__`,
+                imgTag
+              );
+            } else {
+              console.error(
+                `Failed to fetch image for ${imageInfo.variableName}: ${response.status}`
+              );
+              // Remove placeholder if image fetch failed
+              htmlBody = htmlBody.replace(
+                `__IMAGE_PLACEHOLDER_${imageInfo.imageId}__`,
+                `[Image not available: ${imageInfo.variableName}]`
+              );
+            }
+          } catch (error) {
+            console.error(
+              `Error fetching image for ${imageInfo.variableName}:`,
+              error.message
+            );
+            // Remove placeholder if error occurred
+            htmlBody = htmlBody.replace(
+              `__IMAGE_PLACEHOLDER_${imageInfo.imageId}__`,
+              `[Image error: ${imageInfo.variableName}]`
+            );
           }
-        } catch (error) {
-          console.error(`Error fetching image for ${imageInfo.variableName}:`, error.message);
-          // Remove placeholder if error occurred
-          htmlBody = htmlBody.replace(`__IMAGE_PLACEHOLDER_${imageInfo.imageId}__`, `[Image error: ${imageInfo.variableName}]`);
         }
-      }
-      
-      // Wrap in a proper HTML structure
-      const finalHtml = `
+
+        // Wrap in a proper HTML structure
+        const finalHtml = `
 <!DOCTYPE html>
 <html>
 <head>
@@ -281,36 +370,38 @@ export const generateDrafts = async (req, res) => {
 </html>
       `.trim();
 
-      return {
-        row: index + 1,
-        to: row.sendingAccountName || '', // Auto-populate recipient email from Excel
-        subject,
-        body: '', // Keep body empty to use HTML only
-        html: finalHtml,
-        attachments, // Include inline image attachments
-      };
-    }));
+        return {
+          row: index + 1,
+          to: row.sendingAccountName || "", // Auto-populate recipient email from Excel
+          subject,
+          body: "", // Keep body empty to use HTML only
+          html: finalHtml,
+          attachments, // Include inline image attachments
+        };
+      })
+    );
 
     // create drafts using Gmail API
     // const { createDraftsInBatch } = await import('../utils/gmailService.js');
     const createdDrafts = await createDraftsInBatch(user, draftsData);
 
     // count successful vs failed
-    const successCount = createdDrafts.filter(d => d.success).length;
-    const failCount = createdDrafts.filter(d => !d.success).length;
+    const successCount = createdDrafts.filter((d) => d.success).length;
+    const failCount = createdDrafts.filter((d) => !d.success).length;
 
     return res.status(200).json({
-      message: `Created ${successCount} drafts successfully${failCount > 0 ? `, ${failCount} failed` : ''}`,
+      message: `Created ${successCount} drafts successfully${
+        failCount > 0 ? `, ${failCount} failed` : ""
+      }`,
       drafts: createdDrafts,
       successCount,
       failCount,
     });
   } catch (error) {
-    console.error('generate drafts error:', error);
-    return res.status(500).json({ error: 'Failed to generate draft emails' });
+    console.error("generate drafts error:", error);
+    return res.status(500).json({ error: "Failed to generate draft emails" });
   }
 };
-
 
 /**
  * Schedule emails to be sent with time interval
@@ -321,28 +412,42 @@ export const scheduleEmails = async (req, res) => {
     const userId = req.user.id;
 
     if (!fileId || !templateId || !intervalSeconds) {
-      return res.status(400).json({ error: 'fileId, templateId, and intervalSeconds are required' });
+      return res
+        .status(400)
+        .json({
+          error: "fileId, templateId, and intervalSeconds are required",
+        });
     }
 
     if (intervalSeconds < 10) {
-      return res.status(400).json({ error: 'Minimum interval is 10 seconds' });
+      return res.status(400).json({ error: "Minimum interval is 10 seconds" });
     }
 
     // Import scheduler service
-    const { createScheduledJob } = await import('../services/emailScheduler.js');
+    const { createScheduledJob } = await import(
+      "../services/emailScheduler.js"
+    );
 
     // Create and start the scheduled job
-    const scheduledEmail = await createScheduledJob(userId, fileId, templateId, intervalSeconds, true);
+    const scheduledEmail = await createScheduledJob(
+      userId,
+      fileId,
+      templateId,
+      intervalSeconds,
+      true
+    );
 
     return res.status(200).json({
-      message: 'Email sending scheduled successfully',
+      message: "Email sending scheduled successfully",
       scheduledEmailId: scheduledEmail.id,
       totalCount: scheduledEmail.totalCount,
       intervalSeconds: scheduledEmail.timeIntervalSeconds,
     });
   } catch (error) {
-    console.error('schedule emails error:', error);
-    return res.status(500).json({ error: error.message || 'Failed to schedule emails' });
+    console.error("schedule emails error:", error);
+    return res
+      .status(500)
+      .json({ error: error.message || "Failed to schedule emails" });
   }
 };
 
@@ -355,28 +460,44 @@ export const sendEmailsNow = async (req, res) => {
     const userId = req.user.id;
 
     if (!fileId || !templateId || !intervalSeconds) {
-      return res.status(400).json({ error: 'fileId, templateId, and intervalSeconds are required' });
+      return res
+        .status(400)
+        .json({
+          error: "fileId, templateId, and intervalSeconds are required",
+        });
     }
 
     if (intervalSeconds < 10) {
-      return res.status(400).json({ error: 'Minimum interval is 10 seconds' });
+      return res.status(400).json({ error: "Minimum interval is 10 seconds" });
     }
 
     // Import scheduler service
-    const { createScheduledJob } = await import('../services/emailScheduler.js');
+    const { createScheduledJob } = await import(
+      "../services/emailScheduler.js"
+    );
 
     // Create and start the scheduled job immediately, passing row range
-    const scheduledEmail = await createScheduledJob(userId, fileId, templateId, intervalSeconds, true, startRow, endRow);
+    const scheduledEmail = await createScheduledJob(
+      userId,
+      fileId,
+      templateId,
+      intervalSeconds,
+      true,
+      startRow,
+      endRow
+    );
 
     return res.status(200).json({
-      message: 'Email sending started successfully',
+      message: "Email sending started successfully",
       scheduledEmailId: scheduledEmail.id,
       totalCount: scheduledEmail.totalCount,
       intervalSeconds: scheduledEmail.timeIntervalSeconds,
     });
   } catch (error) {
-    console.error('send emails now error:', error);
-    return res.status(500).json({ error: error.message || 'Failed to send emails' });
+    console.error("send emails now error:", error);
+    return res
+      .status(500)
+      .json({ error: error.message || "Failed to send emails" });
   }
 };
 
@@ -387,13 +508,13 @@ export const getScheduledJobs = async (req, res) => {
   try {
     const userId = req.user.id;
 
-    const { getActiveJobs } = await import('../services/emailScheduler.js');
+    const { getActiveJobs } = await import("../services/emailScheduler.js");
     const jobs = await getActiveJobs(userId);
 
     return res.status(200).json({ jobs });
   } catch (error) {
-    console.error('get scheduled jobs error:', error);
-    return res.status(500).json({ error: 'Failed to fetch scheduled jobs' });
+    console.error("get scheduled jobs error:", error);
+    return res.status(500).json({ error: "Failed to fetch scheduled jobs" });
   }
 };
 
@@ -406,27 +527,30 @@ export const pauseScheduledJob = async (req, res) => {
     const userId = req.user.id;
 
     // Verify job belongs to user
-    const ScheduledEmail = (await import('../models/scheduledEmail.js')).default;
+    const ScheduledEmail = (await import("../models/scheduledEmail.js"))
+      .default;
     const scheduledEmail = await ScheduledEmail.findByPk(id);
 
     if (!scheduledEmail) {
-      return res.status(404).json({ error: 'Scheduled job not found' });
+      return res.status(404).json({ error: "Scheduled job not found" });
     }
 
     if (scheduledEmail.userId !== userId) {
-      return res.status(403).json({ error: 'Unauthorized' });
+      return res.status(403).json({ error: "Unauthorized" });
     }
 
-    const { pauseJob } = await import('../services/emailScheduler.js');
+    const { pauseJob } = await import("../services/emailScheduler.js");
     const updatedJob = await pauseJob(parseInt(id));
 
     return res.status(200).json({
-      message: 'Job paused successfully',
+      message: "Job paused successfully",
       job: updatedJob,
     });
   } catch (error) {
-    console.error('pause scheduled job error:', error);
-    return res.status(500).json({ error: error.message || 'Failed to pause job' });
+    console.error("pause scheduled job error:", error);
+    return res
+      .status(500)
+      .json({ error: error.message || "Failed to pause job" });
   }
 };
 
@@ -439,27 +563,30 @@ export const resumeScheduledJob = async (req, res) => {
     const userId = req.user.id;
 
     // Verify job belongs to user
-    const ScheduledEmail = (await import('../models/scheduledEmail.js')).default;
+    const ScheduledEmail = (await import("../models/scheduledEmail.js"))
+      .default;
     const scheduledEmail = await ScheduledEmail.findByPk(id);
 
     if (!scheduledEmail) {
-      return res.status(404).json({ error: 'Scheduled job not found' });
+      return res.status(404).json({ error: "Scheduled job not found" });
     }
 
     if (scheduledEmail.userId !== userId) {
-      return res.status(403).json({ error: 'Unauthorized' });
+      return res.status(403).json({ error: "Unauthorized" });
     }
 
-    const { resumeJob } = await import('../services/emailScheduler.js');
+    const { resumeJob } = await import("../services/emailScheduler.js");
     const updatedJob = await resumeJob(parseInt(id));
 
     return res.status(200).json({
-      message: 'Job resumed successfully',
+      message: "Job resumed successfully",
       job: updatedJob,
     });
   } catch (error) {
-    console.error('resume scheduled job error:', error);
-    return res.status(500).json({ error: error.message || 'Failed to resume job' });
+    console.error("resume scheduled job error:", error);
+    return res
+      .status(500)
+      .json({ error: error.message || "Failed to resume job" });
   }
 };
 
@@ -472,27 +599,30 @@ export const cancelScheduledJob = async (req, res) => {
     const userId = req.user.id;
 
     // Verify job belongs to user
-    const ScheduledEmail = (await import('../models/scheduledEmail.js')).default;
+    const ScheduledEmail = (await import("../models/scheduledEmail.js"))
+      .default;
     const scheduledEmail = await ScheduledEmail.findByPk(id);
 
     if (!scheduledEmail) {
-      return res.status(404).json({ error: 'Scheduled job not found' });
+      return res.status(404).json({ error: "Scheduled job not found" });
     }
 
     if (scheduledEmail.userId !== userId) {
-      return res.status(403).json({ error: 'Unauthorized' });
+      return res.status(403).json({ error: "Unauthorized" });
     }
 
-    const { cancelJob } = await import('../services/emailScheduler.js');
+    const { cancelJob } = await import("../services/emailScheduler.js");
     const updatedJob = await cancelJob(parseInt(id));
 
     return res.status(200).json({
-      message: 'Job cancelled successfully',
+      message: "Job cancelled successfully",
       job: updatedJob,
     });
   } catch (error) {
-    console.error('cancel scheduled job error:', error);
-    return res.status(500).json({ error: error.message || 'Failed to cancel job' });
+    console.error("cancel scheduled job error:", error);
+    return res
+      .status(500)
+      .json({ error: error.message || "Failed to cancel job" });
   }
 };
 
@@ -504,13 +634,18 @@ export const getSentEmails = async (req, res) => {
     const userId = req.user.id;
     const { scheduledEmailId } = req.query;
 
-    const { getSentEmailsHistory } = await import('../services/emailScheduler.js');
-    const sentEmails = await getSentEmailsHistory(userId, scheduledEmailId ? parseInt(scheduledEmailId) : null);
+    const { getSentEmailsHistory } = await import(
+      "../services/emailScheduler.js"
+    );
+    const sentEmails = await getSentEmailsHistory(
+      userId,
+      scheduledEmailId ? parseInt(scheduledEmailId) : null
+    );
 
     return res.status(200).json({ sentEmails });
   } catch (error) {
-    console.error('get sent emails error:', error);
-    return res.status(500).json({ error: 'Failed to fetch sent emails' });
+    console.error("get sent emails error:", error);
+    return res.status(500).json({ error: "Failed to fetch sent emails" });
   }
 };
 
@@ -526,36 +661,53 @@ export const getUploadedFiles = async (req, res) => {
 
     // Count distinct fileIds for pagination
     const totalItems = await UploadedRow.count({
-        distinct: true,
-        col: 'file_id'
+      distinct: true,
+      col: "file_id",
     });
 
     const uploads = await UploadedRow.findAll({
       attributes: [
-        'fileId',
-        [UploadedRow.sequelize.fn('COUNT', UploadedRow.sequelize.col('id')), 'rowCount'],
-        [UploadedRow.sequelize.fn('MIN', UploadedRow.sequelize.col('created_at')), 'createdAt']
+        "fileId",
+        [
+          UploadedRow.sequelize.fn("COUNT", UploadedRow.sequelize.col("id")),
+          "rowCount",
+        ],
+        [
+          UploadedRow.sequelize.fn(
+            "MIN",
+            UploadedRow.sequelize.col("created_at")
+          ),
+          "createdAt",
+        ],
       ],
-      group: ['fileId'],
-      order: [[UploadedRow.sequelize.fn('MIN', UploadedRow.sequelize.col('created_at')), 'DESC']],
+      group: ["fileId"],
+      order: [
+        [
+          UploadedRow.sequelize.fn(
+            "MIN",
+            UploadedRow.sequelize.col("created_at")
+          ),
+          "DESC",
+        ],
+      ],
       limit: limit,
-      offset: offset
+      offset: offset,
     });
 
     const totalPages = Math.ceil(totalItems / limit);
 
-    return res.status(200).json({ 
+    return res.status(200).json({
       uploads,
       pagination: {
         totalItems,
         totalPages,
         currentPage: page,
-        itemsPerPage: limit
-      }
+        itemsPerPage: limit,
+      },
     });
   } catch (error) {
-    console.error('get uploaded files error:', error);
-    return res.status(500).json({ error: 'Failed to fetch uploaded files' });
+    console.error("get uploaded files error:", error);
+    return res.status(500).json({ error: "Failed to fetch uploaded files" });
   }
 };
 
@@ -568,45 +720,48 @@ export const deleteSentEmails = async (req, res) => {
     const { emailIds } = req.body; // Array of sent_emails IDs (DB IDs)
 
     if (!Array.isArray(emailIds) || emailIds.length === 0) {
-      return res.status(400).json({ error: 'No email IDs provided' });
+      return res.status(400).json({ error: "No email IDs provided" });
     }
 
-    const SentEmail = (await import('../models/sentEmail.js')).default;
-    
+    const SentEmail = (await import("../models/sentEmail.js")).default;
+
     // Fetch emails to get Gmail message IDs
     const emailsToDelete = await SentEmail.findAll({
       where: {
         id: emailIds,
-        userId: userId
-      }
+        userId: userId,
+      },
     });
 
     if (emailsToDelete.length === 0) {
-      return res.status(404).json({ error: 'No matching emails found to delete' });
+      return res
+        .status(404)
+        .json({ error: "No matching emails found to delete" });
     }
 
     // Extract Gmail message IDs
     const gmailMessageIds = emailsToDelete
-      .filter(email => email.messageId)
-      .map(email => email.messageId);
+      .filter((email) => email.messageId)
+      .map((email) => email.messageId);
 
     // Delete from Gmail if there are valid message IDs
     if (gmailMessageIds.length > 0) {
       const user = await User.findByPk(userId);
-      
+
       // Check for token refresh
-      const { isTokenExpired, refreshAccessToken, getGmailClient } = await import('../utils/gmailAuth.js');
+      const { isTokenExpired, refreshAccessToken, getGmailClient } =
+        await import("../utils/gmailAuth.js");
       if (user.gmailTokenExpiry && isTokenExpired(user.gmailTokenExpiry)) {
-         const newTokens = await refreshAccessToken(user.gmailRefreshToken);
-         user.gmailAccessToken = newTokens.access_token;
-         await user.save();
+        const newTokens = await refreshAccessToken(user.gmailRefreshToken);
+        user.gmailAccessToken = newTokens.access_token;
+        await user.save();
       }
 
       // Initialize Gmail client
       const gmailClient = getGmailClient(user);
-      
+
       // Call batch delete
-      const { deleteMessages } = await import('../utils/gmailService.js');
+      const { deleteMessages } = await import("../utils/gmailService.js");
       await deleteMessages(gmailClient, gmailMessageIds);
     }
 
@@ -614,18 +769,19 @@ export const deleteSentEmails = async (req, res) => {
     await SentEmail.destroy({
       where: {
         id: emailIds,
-        userId: userId
-      }
+        userId: userId,
+      },
     });
 
-    return res.status(200).json({ 
+    return res.status(200).json({
       message: `Successfully deleted ${emailsToDelete.length} emails`,
-      deletedIds: emailsToDelete.map(e => e.id)
+      deletedIds: emailsToDelete.map((e) => e.id),
     });
-
   } catch (error) {
-    console.error('delete sent emails error:', error);
-    return res.status(500).json({ error: error.message || 'Failed to delete emails' });
+    console.error("delete sent emails error:", error);
+    return res
+      .status(500)
+      .json({ error: error.message || "Failed to delete emails" });
   }
 };
 
@@ -638,29 +794,33 @@ export const validateTemplateMapping = async (req, res) => {
     const { fileId, templateId } = req.query;
 
     if (!fileId || !templateId) {
-      return res.status(400).json({ error: 'fileId and templateId are required' });
+      return res
+        .status(400)
+        .json({ error: "fileId and templateId are required" });
     }
 
     // Fetch template
     const template = await EmailTemplate.findByPk(parseInt(templateId));
     if (!template) {
-      return res.status(404).json({ error: 'Template not found' });
+      return res.status(404).json({ error: "Template not found" });
     }
 
     // Fetch a sample row to get available Excel columns
     const sampleRow = await UploadedRow.findOne({
       where: { fileId },
-      order: [['id', 'ASC']],
+      order: [["id", "ASC"]],
     });
 
     if (!sampleRow) {
-      return res.status(404).json({ error: 'No rows found for this fileId' });
+      return res.status(404).json({ error: "No rows found for this fileId" });
     }
 
     // Get all template variables from database
-    const { default: TemplateVariable } = await import('../models/templateVariable.js');
+    const { default: TemplateVariable } = await import(
+      "../models/templateVariable.js"
+    );
     const allVariables = await TemplateVariable.findAll({
-      order: [['variableName', 'ASC']],
+      order: [["variableName", "ASC"]],
     });
 
     // Extract all {{variable}} placeholders from template
@@ -668,20 +828,28 @@ export const validateTemplateMapping = async (req, res) => {
     const variablePattern = /\{\{([^}]+)\}\}/g;
     const usedVariableNames = new Set();
     let match;
-    
+
     while ((match = variablePattern.exec(templateText)) !== null) {
       usedVariableNames.add(match[1].trim());
     }
 
     // Map variable names to their database entries
-    const usedVariables = allVariables.filter(v => 
+    const usedVariables = allVariables.filter((v) =>
       usedVariableNames.has(v.variableName)
     );
 
     // Get available Excel data keys from sample row
     const rowData = sampleRow.get({ plain: true });
-    const availableKeys = Object.keys(rowData).filter(key => 
-      !['id', 'fileId', 'created_at', 'createdAt', 'updated_at', 'updatedAt'].includes(key)
+    const availableKeys = Object.keys(rowData).filter(
+      (key) =>
+        ![
+          "id",
+          "fileId",
+          "created_at",
+          "createdAt",
+          "updated_at",
+          "updatedAt",
+        ].includes(key)
     );
 
     // Parse rawData for original Excel column names
@@ -690,61 +858,74 @@ export const validateTemplateMapping = async (req, res) => {
       try {
         excelData = JSON.parse(rowData.rawData);
       } catch (e) {
-        console.error('Failed to parse rawData in validation:', e);
+        console.error("Failed to parse rawData in validation:", e);
       }
     }
 
     // Legacy fallback map for old column names
     const legacyMap = {
-      'First Name': 'firstName',
-      'Name': 'firstName',
-      'Client Business Name': 'clientBusinessName',
-      'Company Name': 'clientBusinessName',
-      'Website': 'website',
-      'Client Website': 'website',
-      'Client Traffic': 'clientTraffic',
-      'Competitor Name': 'competitorName',
-      'Competitor Business Name 1': 'competitorName',
-      'Competitor Traffic': 'competitorTraffic',
-      'Competitor Traffic 1': 'competitorTraffic',
-      'Competitor Website': 'competitorWebsite',
-      'Competitor Website 1': 'competitorWebsite',
-      'Competitor Name 2': 'competitorName2',
-      'Competitor Business Name 2': 'competitorName2',
-      'Competitor Traffic 2': 'competitorTraffic2',
-      'Competitor Website 2': 'competitorWebsite2',
-      'Calendar Link': 'calendarLink',
-      'Client Screenshot URL': 'clientScreenshotUrl',
-      'Client Screenshot': 'clientScreenshotUrl',
-      'Client SS': 'clientScreenshotUrl',
-      'Competitor Screenshot URL': 'competitorScreenshotUrl',
-      'Competitor Screenshot': 'competitorScreenshotUrl',
-      'Sending Account Name': 'sendingAccountName',
-      'Email': 'sendingAccountName',
+      "First Name": "firstName",
+      Name: "firstName",
+      "Client Business Name": "clientBusinessName",
+      "Company Name": "clientBusinessName",
+      Website: "website",
+      "Client Website": "website",
+      "Client Traffic": "clientTraffic",
+      "Competitor Name": "competitorName",
+      "Competitor Business Name 1": "competitorName",
+      "Competitor Traffic": "competitorTraffic",
+      "Competitor Traffic 1": "competitorTraffic",
+      "Competitor Website": "competitorWebsite",
+      "Competitor Website 1": "competitorWebsite",
+      "Competitor Name 2": "competitorName2",
+      "Competitor Business Name 2": "competitorName2",
+      "Competitor Traffic 2": "competitorTraffic2",
+      "Competitor Website 2": "competitorWebsite2",
+      "Calendar Link": "calendarLink",
+      "Client Screenshot URL": "clientScreenshotUrl",
+      "Client Screenshot": "clientScreenshotUrl",
+      "Client SS": "clientScreenshotUrl",
+      "Competitor Screenshot URL": "competitorScreenshotUrl",
+      "Competitor Screenshot": "competitorScreenshotUrl",
+      "Sending Account Name": "sendingAccountName",
+      Email: "sendingAccountName",
     };
 
     // Check each used variable to see if data exists (same logic as replacePlaceholders)
-    const variableStatus = usedVariables.map(variable => {
+    const variableStatus = usedVariables.map((variable) => {
       const varName = variable.variableName;
-      
+
       let hasData = false;
       let sampleVal = null;
 
       // Try: rawData Excel column > database column > legacy mapping
-      if (excelData[varName] !== undefined && excelData[varName] !== null && excelData[varName] !== '') {
+      if (
+        excelData[varName] !== undefined &&
+        excelData[varName] !== null &&
+        excelData[varName] !== ""
+      ) {
         hasData = true;
         sampleVal = excelData[varName];
-      } else if (rowData[varName] !== undefined && rowData[varName] !== null && rowData[varName] !== '') {
+      } else if (
+        rowData[varName] !== undefined &&
+        rowData[varName] !== null &&
+        rowData[varName] !== ""
+      ) {
         hasData = true;
         sampleVal = rowData[varName];
       } else {
         const legacyKey = legacyMap[varName];
-        if (legacyKey && rowData[legacyKey] !== undefined && rowData[legacyKey] !== null && rowData[legacyKey] !== '') {
+        if (
+          legacyKey &&
+          rowData[legacyKey] !== undefined &&
+          rowData[legacyKey] !== null &&
+          rowData[legacyKey] !== ""
+        ) {
           hasData = true;
           sampleVal = rowData[legacyKey];
         }
       }
-      
+
       return {
         name: variable.variableName,
         key: variable.variableKey,
@@ -754,8 +935,8 @@ export const validateTemplateMapping = async (req, res) => {
       };
     });
 
-    const matchedCount = variableStatus.filter(v => v.hasData).length;
-    const missingCount = variableStatus.filter(v => !v.hasData).length;
+    const matchedCount = variableStatus.filter((v) => v.hasData).length;
+    const missingCount = variableStatus.filter((v) => !v.hasData).length;
 
     return res.status(200).json({
       variables: variableStatus,
@@ -767,8 +948,10 @@ export const validateTemplateMapping = async (req, res) => {
       availableColumns: availableKeys,
     });
   } catch (error) {
-    console.error('validate template mapping error:', error);
-    return res.status(500).json({ error: 'Failed to validate template mapping' });
+    console.error("validate template mapping error:", error);
+    return res
+      .status(500)
+      .json({ error: "Failed to validate template mapping" });
   }
 };
 
@@ -780,24 +963,26 @@ export const previewEmail = async (req, res) => {
     const { fileId, templateId, rowNumber } = req.query;
 
     if (!fileId || !templateId) {
-      return res.status(400).json({ error: 'fileId and templateId are required' });
+      return res
+        .status(400)
+        .json({ error: "fileId and templateId are required" });
     }
 
     // fetch template
     const template = await EmailTemplate.findByPk(parseInt(templateId));
 
     if (!template) {
-      return res.status(404).json({ error: 'Template not found' });
+      return res.status(404).json({ error: "Template not found" });
     }
 
     // fetch rows for this fileId
     const allRows = await UploadedRow.findAll({
       where: { fileId },
-      order: [['id', 'ASC']],
+      order: [["id", "ASC"]],
     });
 
     if (allRows.length === 0) {
-      return res.status(404).json({ error: 'No rows found for this fileId' });
+      return res.status(404).json({ error: "No rows found for this fileId" });
     }
 
     // Use specified row or default to first row
@@ -806,23 +991,27 @@ export const previewEmail = async (req, res) => {
     const sampleRow = allRows[safeIndex];
 
     // Replace placeholders with actual data
-    const { replacePlaceholders } = await import('../utils/templateHelper.js');
-    const subjectResult = await replacePlaceholders(template.subject, sampleRow);
+    const { replacePlaceholders } = await import("../utils/templateHelper.js");
+    const subjectResult = await replacePlaceholders(
+      template.subject,
+      sampleRow
+    );
     const bodyResult = await replacePlaceholders(template.body, sampleRow);
 
-    const subject = typeof subjectResult === 'string' ? subjectResult : subjectResult.text;
-    const body = typeof bodyResult === 'string' ? bodyResult : bodyResult.text;
-    const images = typeof bodyResult === 'object' ? bodyResult.images : [];
+    const subject =
+      typeof subjectResult === "string" ? subjectResult : subjectResult.text;
+    const body = typeof bodyResult === "string" ? bodyResult : bodyResult.text;
+    const images = typeof bodyResult === "object" ? bodyResult.images : [];
 
     return res.status(200).json({
       subject,
       body,
       images,
       rowNumber: safeIndex + 1,
-      recipientEmail: sampleRow.sendingAccountName || '',
+      recipientEmail: sampleRow.sendingAccountName || "",
     });
   } catch (error) {
-    console.error('preview email error:', error);
-    return res.status(500).json({ error: 'Failed to generate email preview' });
+    console.error("preview email error:", error);
+    return res.status(500).json({ error: "Failed to generate email preview" });
   }
 };

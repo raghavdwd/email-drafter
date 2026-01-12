@@ -1,5 +1,19 @@
 import express from "express";
-import { adminLogin, getAllUsers, approveUser, createTemplate, getAllTemplates, deleteTemplate, updateTemplate, deleteUser, createVariable, getAllVariables, updateVariable, deleteVariable, getDashboardStats } from "../controllers/admin.controller.js";
+import {
+  adminLogin,
+  getAllUsers,
+  approveUser,
+  createTemplate,
+  getAllTemplates,
+  deleteTemplate,
+  updateTemplate,
+  deleteUser,
+  createVariable,
+  getAllVariables,
+  updateVariable,
+  deleteVariable,
+  getDashboardStats,
+} from "../controllers/admin.controller.js";
 import { verifyToken, verifyAdmin } from "../middleware/auth.middleware.js";
 
 const router = express.Router();
