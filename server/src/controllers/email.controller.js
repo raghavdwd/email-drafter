@@ -62,6 +62,42 @@ export const uploadExcel = async (req, res) => {
     // convert to JSON
     const data = xlsx.utils.sheet_to_json(sheet);
 
+    // Patch data with hyperlink targets if available
+    // xlsx doesn't include hyperlinks in sheet_to_json output by default
+    const range = xlsx.utils.decode_range(sheet["!ref"]);
+    const headers = [];
+    // Identify headers from the first row
+    for (let C = range.s.c; C <= range.e.c; ++C) {
+      const cell = sheet[xlsx.utils.encode_cell({ r: range.s.r, c: C })];
+      if (cell && cell.v) {
+        headers[C] = cell.v.toString().trim();
+      }
+    }
+
+    // Iterate through data rows to find hyperlinks
+    // Note: sheet_to_json might have different indexing if there are empty rows
+    // but usually it starts from range.s.r + 1
+    const jsonRows = xlsx.utils.sheet_to_json(sheet);
+
+    // We'll update the 'data' objects directly by looking at the worksheet cells
+    for (let R = range.s.r + 1; R <= range.e.r; ++R) {
+      const rowIndex = R - (range.s.r + 1);
+      if (rowIndex >= data.length) break;
+
+      for (let C = range.s.c; C <= range.e.c; ++C) {
+        const cellAddress = xlsx.utils.encode_cell({ r: R, c: C });
+        const cell = sheet[cellAddress];
+
+        // If cell has a hyperlink target, use it in the data
+        if (cell && cell.l && cell.l.Target) {
+          const header = headers[C];
+          if (header && data[rowIndex]) {
+            data[rowIndex][header] = cell.l.Target;
+          }
+        }
+      }
+    }
+
     if (data.length === 0) {
       return res.status(400).json({ error: "Excel file is empty" });
     }
@@ -237,12 +273,10 @@ export const generateDrafts = async (req, res) => {
           : null;
       } catch (error) {
         console.error("token refresh error:", error);
-        return res
-          .status(401)
-          .json({
-            error:
-              "Failed to refresh Gmail token. Please reconnect your Gmail account.",
-          });
+        return res.status(401).json({
+          error:
+            "Failed to refresh Gmail token. Please reconnect your Gmail account.",
+        });
       }
     }
 
@@ -364,7 +398,7 @@ export const generateDrafts = async (req, res) => {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
-<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; padding: 20px;">
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 100%; margin: 0; padding: 0; text-align: left;">
   ${htmlBody}
 </body>
 </html>
@@ -412,11 +446,9 @@ export const scheduleEmails = async (req, res) => {
     const userId = req.user.id;
 
     if (!fileId || !templateId || !intervalSeconds) {
-      return res
-        .status(400)
-        .json({
-          error: "fileId, templateId, and intervalSeconds are required",
-        });
+      return res.status(400).json({
+        error: "fileId, templateId, and intervalSeconds are required",
+      });
     }
 
     if (intervalSeconds < 10) {
@@ -460,11 +492,9 @@ export const sendEmailsNow = async (req, res) => {
     const userId = req.user.id;
 
     if (!fileId || !templateId || !intervalSeconds) {
-      return res
-        .status(400)
-        .json({
-          error: "fileId, templateId, and intervalSeconds are required",
-        });
+      return res.status(400).json({
+        error: "fileId, templateId, and intervalSeconds are required",
+      });
     }
 
     if (intervalSeconds < 10) {
