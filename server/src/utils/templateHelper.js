@@ -146,8 +146,12 @@ export const replacePlaceholders = async (text, row) => {
 
       // For non-image variables, return the value
       return value;
-    }
+    },
   );
+
+  // Apply bold formatting for [[text]] -> <b>text</b>
+  // This happens AFTER variable replacement, so variables can contain bold syntax too
+  processedText = processedText.replace(/\[\[(.*?)\]\]/g, "<b>$1</b>");
 
   return { text: processedText, images: imagesToEmbed };
 };
