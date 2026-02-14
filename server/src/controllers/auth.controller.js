@@ -168,3 +168,23 @@ export const disconnectGmail = async (req, res) => {
   }
 };
 
+// pre-authentication endpoint
+export const preAuth = async (req, res) => {
+  try {
+    const { password } = req.body;
+
+    if (!password) {
+      return res.status(400).json({ success: false, error: 'Password is required' });
+    }
+
+    if (password === 'raghav2026') {
+      return res.json({ success: true });
+    } else {
+      return res.status(401).json({ success: false, error: 'Invalid password' });
+    }
+  } catch (error) {
+    console.error('pre-auth error:', error);
+    return res.status(500).json({ success: false, error: 'Authentication failed' });
+  }
+};
+

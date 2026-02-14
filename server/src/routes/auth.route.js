@@ -7,6 +7,7 @@ import {
   gmailCallback,
   checkGmailConnection,
   disconnectGmail,
+  preAuth,
 } from "../controllers/auth.controller.js";
 import { verifyToken } from "../middleware/auth.middleware.js";
 import User from "../models/user.js";
@@ -121,5 +122,8 @@ router.get("/gmail", verifyToken, initiateGmailAuth);
 router.get("/gmail/callback", gmailCallback);
 router.get("/gmail/status", verifyToken, checkGmailConnection);
 router.post("/gmail/disconnect", verifyToken, disconnectGmail);
+
+// Pre-authentication route
+router.post("/pre-auth", preAuth);
 
 export default router;
