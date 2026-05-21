@@ -309,28 +309,7 @@ const Dashboard = () => {
       {/* main content */}
       <div className="container mx-auto p-4 max-w-5xl">
         <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-4">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-8 w-8 text-primary"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
-              />
-            </svg>
-          </div>
-          <h1 className="text-4xl font-bold text-base-content mb-2">
-            Email Drafter
-          </h1>
-          <p className="text-lg text-base-content/60">
-            Create professional email drafts and schedule automated sending
-          </p>
+          <h1 className="text-4xl font-bold mb-2">Welcome, {user?.name || "User"}!</h1>
         </div>
 
         {/* error alert */}
